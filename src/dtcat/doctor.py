@@ -11,6 +11,11 @@ from pathlib import Path
 from rich.console import Console
 from rich.table import Table
 
+try:
+    import pyodbc
+except ImportError:  # pragma: no cover - pyodbc é dependência declarada
+    pyodbc = None  # type: ignore[assignment]
+
 
 def _find_faircom_home() -> Path | None:
     env = os.environ.get("FAIRCOM_HOME") or os.environ.get("CTREE_HOME")
@@ -30,14 +35,15 @@ def _find_faircom_home() -> Path | None:
 
 
 def _check_odbc() -> tuple[bool, str]:
-    try:
-        import pyodbc
-    except ImportError:
+    if pyodbc is None:
         return False, "pyodbc não instalado (rode: uv tool install dtcat)"
     drivers = pyodbc.drivers()
     faircom_drivers = [d for d in drivers if "c-tree" in d.lower() or "faircom" in d.lower()]
     if not faircom_drivers:
-        return False, f"driver ODBC FairCom não encontrado. Drivers disponíveis: {drivers or '[nenhum]'}"
+        return (
+            False,
+            f"driver ODBC FairCom não encontrado. Drivers disponíveis: {drivers or '[nenhum]'}",
+        )
     return True, f"OK ({', '.join(faircom_drivers)})"
 
 
@@ -50,7 +56,10 @@ def _check_python() -> tuple[bool, str]:
 def _check_faircom() -> tuple[bool, str]:
     home = _find_faircom_home()
     if home is None:
-        return False, "FairCom DB não encontrado (defina FAIRCOM_HOME ou veja docs/setup-{linux,windows}.md)"
+        return (
+            False,
+            "FairCom DB não encontrado (defina FAIRCOM_HOME ou veja docs/setup-{linux,windows}.md)",
+        )
     return True, str(home)
 
 

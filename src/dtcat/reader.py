@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterator
 
 from rich.console import Console
 from rich.table import Table
@@ -89,7 +89,12 @@ def read_info(arquivo: Path, sample: int, console: Console) -> DtcInfo:
 
 
 def _render_info(
-    arquivo: Path, table: str, cols: list[Column], row_count: int, rows: list[dict], console: Console
+    arquivo: Path,
+    table: str,
+    cols: list[Column],
+    row_count: int,
+    rows: list[dict],
+    console: Console,
 ) -> None:
     console.print(f"\n[bold]Arquivo:[/] {arquivo}")
     console.print(f"[bold]Tabela:[/] {table}")
@@ -106,7 +111,7 @@ def _render_info(
 
     if rows:
         sample_tbl = Table(title=f"Amostra ({len(rows)} registros)")
-        for k in rows[0].keys():
+        for k in rows[0]:
             sample_tbl.add_column(k)
         for r in rows:
             sample_tbl.add_row(*(str(v) for v in r.values()))

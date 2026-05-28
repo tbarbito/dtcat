@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
 
 from rich.console import Console
@@ -10,7 +10,7 @@ from rich.console import Console
 from dtcat.reader import read_all
 
 
-class ExportFormat(str, Enum):
+class ExportFormat(StrEnum):
     csv = "csv"
     json = "json"
     xlsx = "xlsx"
@@ -20,17 +20,18 @@ def _to_dataframe(columns: list[str], rows: list[tuple]):
     import pandas as pd
 
     df = pd.DataFrame.from_records(rows, columns=columns)
-    for col in df.select_dtypes(include=["object"]).columns:
-        df[col] = df[col].apply(_decode_cell)
-    return df
+    if df.empty:
+        return df
+    return df.map(_decode_cell)
 
 
 def _decode_cell(v):
     if isinstance(v, bytes):
         try:
-            return v.decode("cp1252")
+            s = v.decode("cp1252")
         except UnicodeDecodeError:
-            return v.decode("latin1", errors="replace")
+            s = v.decode("latin1", errors="replace")
+        return s.rstrip()
     if isinstance(v, str):
         return v.rstrip()
     return v
