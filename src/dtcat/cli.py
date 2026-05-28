@@ -87,7 +87,7 @@ def batch(
         console.print(f"[red]Pasta não encontrada:[/] {pasta}")
         raise typer.Exit(code=1)
     output.mkdir(parents=True, exist_ok=True)
-    arquivos = sorted(pasta.glob("*.dtc")) + sorted(pasta.glob("*.DTC"))
+    arquivos = sorted(set(pasta.glob("*.dtc")) | set(pasta.glob("*.DTC")))
     if not arquivos:
         console.print(f"[yellow]Nenhum .dtc encontrado em {pasta}[/]")
         raise typer.Exit(code=1)
