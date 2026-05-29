@@ -64,7 +64,7 @@ source ~/.zshrc
 ## 3. Instale o dtcat
 
 ```bash
-uv tool install dtcat
+uv tool install git+https://github.com/tbarbito/dtcat.git
 ```
 
 ## 4. Valide

@@ -51,7 +51,7 @@ Ou use o instalador assistido:
 ## 3. Instale o dtcat
 
 ```powershell
-uv tool install dtcat
+uv tool install git+https://github.com/tbarbito/dtcat.git
 ```
 
 ## 4. Valide

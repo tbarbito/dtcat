@@ -61,11 +61,15 @@ Guias detalhados de configuração passo a passo:
 
 ## Instale o dtcat
 
+Instale direto do GitHub (requer Python 3.11+):
+
 ```bash
-uv tool install dtcat
+uv tool install git+https://github.com/tbarbito/dtcat.git
 # ou
-pipx install dtcat
+pipx install git+https://github.com/tbarbito/dtcat.git
 ```
+
+Para fixar uma versão específica, acrescente `@v0.3.0` ao final da URL.
 
 Valide que está tudo pronto:
 
