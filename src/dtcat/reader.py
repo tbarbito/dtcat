@@ -1,4 +1,9 @@
-"""Leitor de .dtc (FairCom c-tree ISAM) via driver Python nativo + ctsqlimp."""
+"""Leitor de .dtc (FairCom c-tree ISAM).
+
+Caminho principal: parser DODA direto (fixed-length, sem servidor). Fallback:
+registro via ctsqlimp + driver nativo, quando o parser não se aplica (arquivo
+variável, sem DODA, ou que precise do índice c-tree).
+"""
 
 from __future__ import annotations
 
@@ -10,7 +15,7 @@ from pathlib import Path
 from rich.console import Console
 from rich.table import Table
 
-from dtcat import faircom
+from dtcat import faircom, parser
 
 
 @dataclass
@@ -30,13 +35,12 @@ class DtcInfo:
     sample: list[dict]
 
 
+# --- caminho c-tree (fallback) -------------------------------------------
+
+
 @contextmanager
 def _open_dtc(arquivo: Path) -> Iterator[tuple[object, str]]:
-    """Registra o .dtc como tabela SQL, abre conexão e garante o cleanup.
-
-    Yields ``(connection, table_name)``. Ao sair, desvincula a tabela e remove
-    a cópia feita no diretório de trabalho do servidor.
-    """
+    """Registra o .dtc como tabela SQL (ctsqlimp), abre conexão e faz cleanup."""
     target, table = faircom.register_isam(arquivo)
     conn = faircom.connect()
     try:
@@ -49,11 +53,7 @@ def _open_dtc(arquivo: Path) -> Iterator[tuple[object, str]]:
 
 
 def _columns_from_description(description) -> list[Column]:
-    """Converte o cursor.description (DB-API 7-tuplas) em Column.
-
-    Tupla: (name, type_code, display_size, internal_size, precision, scale, null_ok)
-    O type_code do pyctree é o tipo Python (int, str, datetime.date, ...).
-    """
+    """Converte o cursor.description (DB-API 7-tuplas) em Column."""
     cols: list[Column] = []
     for d in description or []:
         type_code = d[1]
@@ -64,18 +64,57 @@ def _columns_from_description(description) -> list[Column]:
     return cols
 
 
+def _columns_from_layout(layout: faircom.Layout) -> list[Column]:
+    return [Column(name=f.name, type=f.ctype, size=f.length, nullable=True) for f in layout.fields]
+
+
+# --- API pública ---------------------------------------------------------
+
+
+def read_all(arquivo: Path, keep_deleted: bool = False) -> tuple[list[str], list[tuple]]:
+    """Lê todos os registros de um .dtc. Retorna (columns, rows).
+
+    Usa o parser DODA direto quando o arquivo tem assinatura Protheus
+    (fixed-length + flag de delete no offset 0); senão cai pro caminho c-tree.
+    """
+    layout = faircom.extract_layout(arquivo)
+    if layout is not None and layout.is_protheus:
+        return parser.read_fixed(arquivo.read_bytes(), layout, keep_deleted=keep_deleted)
+
+    with _open_dtc(arquivo) as (conn, table):
+        cur = conn.cursor()
+        if keep_deleted:
+            cur.execute(f"SELECT * FROM {table}")
+        else:
+            cur.execute(f"SELECT * FROM {table} WHERE D_E_L_E_T_ <> '*' OR D_E_L_E_T_ IS NULL")
+        columns = [d[0] for d in cur.description]
+        rows = cur.fetchall()
+    return columns, rows
+
+
 def read_info(arquivo: Path, sample: int, console: Console) -> DtcInfo:
     if not arquivo.is_file():
         console.print(f"[red]Arquivo não encontrado:[/] {arquivo}")
         raise SystemExit(1)
-    with _open_dtc(arquivo) as (conn, table):
-        cur = conn.cursor()
-        cur.execute(f"SELECT COUNT(*) FROM {table}")
-        row_count = int(cur.fetchone()[0])
-        cur.execute(f"SELECT * FROM {table}")
-        cols = _columns_from_description(cur.description)
-        cur_cols = [c.name for c in cols]
-        rows = [dict(zip(cur_cols, row, strict=False)) for row in cur.fetchmany(sample)]
+
+    layout = faircom.extract_layout(arquivo)
+    if layout is not None and layout.is_protheus:
+        cols = _columns_from_layout(layout)
+        _, rows_all = parser.read_fixed(arquivo.read_bytes(), layout, keep_deleted=False)
+        row_count = len(rows_all)
+        names = [c.name for c in cols]
+        rows = [dict(zip(names, r, strict=False)) for r in rows_all[:sample]]
+        table = arquivo.stem
+    else:
+        with _open_dtc(arquivo) as (conn, tbl):
+            cur = conn.cursor()
+            cur.execute(f"SELECT COUNT(*) FROM {tbl}")
+            row_count = int(cur.fetchone()[0])
+            cur.execute(f"SELECT * FROM {tbl}")
+            cols = _columns_from_description(cur.description)
+            names = [c.name for c in cols]
+            rows = [dict(zip(names, row, strict=False)) for row in cur.fetchmany(sample)]
+            table = tbl
 
     _render_info(arquivo, table, cols, row_count, rows, console)
     return DtcInfo(file=arquivo, table=table, columns=cols, row_count=row_count, sample=rows)
@@ -109,16 +148,3 @@ def _render_info(
         for r in rows:
             sample_tbl.add_row(*(str(v) for v in r.values()))
         console.print(sample_tbl)
-
-
-def read_all(arquivo: Path, keep_deleted: bool = False) -> tuple[list[str], list[tuple]]:
-    """Lê todos os registros de um .dtc. Retorna (columns, rows)."""
-    with _open_dtc(arquivo) as (conn, table):
-        cur = conn.cursor()
-        if keep_deleted:
-            cur.execute(f"SELECT * FROM {table}")
-        else:
-            cur.execute(f"SELECT * FROM {table} WHERE D_E_L_E_T_ <> '*' OR D_E_L_E_T_ IS NULL")
-        columns = [d[0] for d in cur.description]
-        rows = cur.fetchall()
-    return columns, rows

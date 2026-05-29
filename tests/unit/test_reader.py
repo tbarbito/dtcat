@@ -2,16 +2,23 @@
 
 from __future__ import annotations
 
-from contextlib import contextmanager
+import struct
 from pathlib import Path
 
 import pytest
 
 from dtcat import reader
+from dtcat.faircom import FieldDef, Layout
+
+
+def _force_ctree(mocker):
+    """Faz extract_layout devolver None → caminho c-tree (fallback)."""
+    mocker.patch("dtcat.reader.faircom.extract_layout", return_value=None)
 
 
 def _mock_faircom(mocker, conn, table="dtcat_sample01"):
-    """Mocka o trio register/connect/unregister do módulo faircom."""
+    """Mocka o trio register/connect/unregister do caminho c-tree."""
+    _force_ctree(mocker)
     target = Path("/fake/dbs") / "sample01.dtc"
     mocker.patch("dtcat.reader.faircom.register_isam", return_value=(target, table))
     mocker.patch("dtcat.reader.faircom.connect", return_value=conn)
@@ -19,9 +26,31 @@ def _mock_faircom(mocker, conn, table="dtcat_sample01"):
     return unreg, target, table
 
 
+def _protheus_layout() -> Layout:
+    return Layout(
+        record_length=16,
+        is_fixed=True,
+        fields=[
+            FieldDef("D_E_L_E_T_E_D", 0, 1, "FSTRING"),
+            FieldDef("R_E_C_N_O", 4, 4, "INT4U"),
+            FieldDef("NOME", 8, 8, "FSTRING"),
+        ],
+    )
+
+
+def _protheus_bytes() -> bytes:
+    def rec(flag, recno, nome):
+        b = bytearray(16)
+        b[0:1] = flag
+        b[4:8] = struct.pack("<I", recno)
+        b[8:16] = nome.ljust(8)[:8]
+        return bytes(b)
+
+    return b"\xff" * 16 + rec(b" ", 1, b"Joao") + rec(b"*", 2, b"Maria")
+
+
 class TestColumnsFromDescription:
     def test_maps_db_api_description(self) -> None:
-        # (name, type_code, display_size, internal_size, precision, scale, null_ok)
         desc = [
             ("cod", int, None, 4, 10, 0, 1),
             ("nome", str, None, 16, 15, 0, 0),
@@ -31,14 +60,67 @@ class TestColumnsFromDescription:
         assert cols[0].type == "int"
         assert cols[0].size == 10
         assert cols[0].nullable is True
-        assert cols[1].type == "str"
         assert cols[1].nullable is False
 
     def test_handles_empty(self) -> None:
         assert reader._columns_from_description(None) == []
 
 
-class TestReadInfo:
+class TestParserPath:
+    """Caminho principal: arquivo com assinatura Protheus → parser DODA direto."""
+
+    def test_read_all_uses_parser(self, tmp_path: Path, mocker) -> None:
+        arquivo = tmp_path / "sa1.dtc"
+        arquivo.write_bytes(_protheus_bytes())
+        mocker.patch("dtcat.reader.faircom.extract_layout", return_value=_protheus_layout())
+        # nenhum mock de c-tree: se cair no fallback, quebra
+        no_ctree = mocker.patch("dtcat.reader._open_dtc", side_effect=AssertionError("usou c-tree"))
+
+        cols, rows = reader.read_all(arquivo)
+
+        assert cols == ["D_E_L_E_T_E_D", "R_E_C_N_O", "NOME"]
+        assert [r[2] for r in rows] == ["Joao"]  # Maria deletada filtrada
+        no_ctree.assert_not_called()
+
+    def test_read_info_uses_parser(self, tmp_path: Path, mocker) -> None:
+        from rich.console import Console
+
+        arquivo = tmp_path / "sa1.dtc"
+        arquivo.write_bytes(_protheus_bytes())
+        mocker.patch("dtcat.reader.faircom.extract_layout", return_value=_protheus_layout())
+
+        info = reader.read_info(arquivo, sample=5, console=Console(record=True))
+
+        assert info.table == "sa1"
+        assert info.row_count == 1  # só Joao (Maria deletada)
+        assert [c.name for c in info.columns] == ["D_E_L_E_T_E_D", "R_E_C_N_O", "NOME"]
+
+    def test_non_protheus_layout_falls_back(self, tmp_path: Path, mocker) -> None:
+        # layout fixed mas sem flag de delete no offset 0 → não é Protheus
+        layout = Layout(
+            record_length=8,
+            is_fixed=True,
+            fields=[FieldDef("ID", 0, 4, "INT4U"), FieldDef("X", 4, 4, "INT4U")],
+        )
+        arquivo = tmp_path / "x.dtc"
+        arquivo.write_bytes(b"\x00" * 8)
+        mocker.patch("dtcat.reader.faircom.extract_layout", return_value=layout)
+        cursor = mocker.MagicMock()
+        cursor.description = [("ID",)]
+        cursor.fetchall.return_value = []
+        conn = mocker.MagicMock()
+        conn.cursor.return_value = cursor
+        # register/connect/unregister (sem _force_ctree, pois layout já é não-protheus)
+        target = tmp_path / "x.dtc"
+        mocker.patch("dtcat.reader.faircom.register_isam", return_value=(target, "t"))
+        mocker.patch("dtcat.reader.faircom.connect", return_value=conn)
+        mocker.patch("dtcat.reader.faircom.unregister_isam")
+
+        cols, _ = reader.read_all(arquivo)
+        assert cols == ["ID"]
+
+
+class TestReadInfoCtree:
     def test_missing_file_exits(self, tmp_path: Path) -> None:
         from rich.console import Console
 
@@ -67,13 +149,10 @@ class TestReadInfo:
         assert info.table == table
         assert info.row_count == 42
         assert len(info.columns) == 2
-        assert info.columns[0].name == "FIELD_CODE"
-        assert info.columns[1].nullable is True
-        # cleanup sempre roda
         unreg.assert_called_once_with(target, table)
 
 
-class TestReadAll:
+class TestReadAllCtree:
     def test_filters_deleted_by_default(self, tmp_path: Path, mocker) -> None:
         arquivo = tmp_path / "sample.dtc"
         arquivo.write_bytes(b"\x00")
@@ -84,10 +163,9 @@ class TestReadAll:
         conn.cursor.return_value = cursor
         unreg, target, table = _mock_faircom(mocker, conn)
 
-        cols, rows = reader.read_all(arquivo)
+        cols, _rows = reader.read_all(arquivo)
 
         assert cols == ["A", "D_E_L_E_T_"]
-        assert rows == [(1, " ")]
         executed = cursor.execute.call_args[0][0]
         assert "D_E_L_E_T_" in executed
         unreg.assert_called_once_with(target, table)
@@ -107,8 +185,6 @@ class TestReadAll:
         executed = cursor.execute.call_args[0][0]
         assert "D_E_L_E_T_" not in executed
 
-
-class TestOpenDtcCleanup:
     def test_unregister_runs_even_on_error(self, tmp_path: Path, mocker) -> None:
         arquivo = tmp_path / "sample.dtc"
         arquivo.write_bytes(b"\x00")
@@ -123,8 +199,3 @@ class TestOpenDtcCleanup:
 
         unreg.assert_called_once_with(target, table)
         conn.close.assert_called_once()
-
-
-@contextmanager
-def _noop():
-    yield

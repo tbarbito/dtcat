@@ -73,26 +73,26 @@ Todas as verificações devem reportar **OK** (Python, FairCom, lib nativa, driv
 
 ## 5. Uso típico
 
-```bash
-# 1. Inicie o servidor FairCom local (uma vez por sessão)
-dtcat server start
-dtcat server status
+> Para a maioria dos `.dtc` (fixed-length, ex.: exports tipo APSDU) **não é
+> preciso iniciar o servidor** — o dtcat lê direto pelo parser DODA. O
+> `dtcat server start` só é necessário no fallback c-tree (arquivos que tragam
+> o índice / não fixed-length).
 
-# 2. Inspecione um arquivo .dtc
+```bash
+# Inspecione um arquivo .dtc (não precisa do servidor)
 dtcat info ~/Downloads/clientes.dtc
 
-# 3. Exporte
+# Exporte
 dtcat export ~/Downloads/clientes.dtc -f csv -o ~/out/clientes.csv
 
-# 4. Lote: pasta inteira
+# Lote: pasta inteira
 dtcat batch ~/inbox/ -f csv -o ~/out/
 
-# 5. Pare o servidor quando terminar
+# (Fallback c-tree) só se algum arquivo precisar do servidor:
+dtcat server start
+# ... dtcat info/export ...
 dtcat server stop
 ```
-
-O `dtcat` registra cada `.dtc` no dicionário SQL (via `ctsqlimp`), lê e depois
-desvincula automaticamente — os dados originais não são alterados.
 
 ## Conexão (avançado)
 

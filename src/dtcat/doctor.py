@@ -62,6 +62,15 @@ def _check_ctsqlimp(home: Path | None) -> tuple[bool, str]:
     return True, str(tool)
 
 
+def _check_ctinfo(home: Path | None) -> tuple[bool, str]:
+    if home is None:
+        return False, "skipped (FairCom não encontrado)"
+    tool = faircom.ctinfo_path(home)
+    if tool is None:
+        return False, "utilidade ctinfo não localizada em tools/ (usada pelo parser DODA)"
+    return True, str(tool)
+
+
 def run_doctor(console: Console) -> bool:
     home = faircom.find_faircom_home()
     checks = [
@@ -69,8 +78,9 @@ def run_doctor(console: Console) -> bool:
         ("FairCom DB instalado", _check_faircom(home)),
         ("Lib nativa do client SQL", _check_native_lib(home)),
         ("Driver Python nativo (pyctree)", _check_native_driver(home)),
-        ("Binário do servidor", _check_server_binary(home)),
-        ("Utilidade ctsqlimp", _check_ctsqlimp(home)),
+        ("Utilidade ctinfo (parser DODA)", _check_ctinfo(home)),
+        ("Binário do servidor (fallback c-tree)", _check_server_binary(home)),
+        ("Utilidade ctsqlimp (fallback c-tree)", _check_ctsqlimp(home)),
     ]
     table = Table(title="dtcat doctor", show_lines=False)
     table.add_column("Check", style="bold")

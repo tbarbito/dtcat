@@ -132,6 +132,21 @@ class TestCheckCtsqlimp:
         assert ok is False
 
 
+class TestCheckCtinfo:
+    def test_finds_ctinfo_standalone(self, tmp_path: Path) -> None:
+        tools = tmp_path / "tools"
+        tools.mkdir()
+        (tools / "ctinfo.standalone").write_text("#!/bin/sh\n")
+        (tools / "ctinfo.standalone").chmod(0o755)
+        ok, detail = doctor._check_ctinfo(tmp_path)
+        assert ok is True
+        assert "ctinfo" in detail
+
+    def test_missing_ctinfo(self, tmp_path: Path) -> None:
+        ok, _ = doctor._check_ctinfo(tmp_path)
+        assert ok is False
+
+
 class TestRunDoctor:
     def test_returns_false_with_no_faircom(self, no_faircom: None) -> None:
         console = Console(record=True)

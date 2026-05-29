@@ -5,6 +5,26 @@ Todas as mudanças relevantes deste projeto são documentadas aqui.
 O formato segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/)
 e o projeto adota [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
+## [0.3.0] - 2026-05-29
+
+Leitura direta guiada pelo DODA — validada contra um arquivo `.dtc` real
+exportado de Protheus (SX3 da SA1, 363 campos).
+
+### Added
+- **Parser DODA direto como caminho PRINCIPAL de leitura** (`dtcat.parser`):
+  lê os registros fixed-length diretamente do layout físico, **sem precisar do
+  servidor SQL nem do índice c-tree**. Resolve o caso real: exports tipo APSDU
+  vêm como dados puros, e o índice referenciado no IFIL aponta para um caminho
+  do servidor de origem (inexistente no destino) — o que fazia o `ctsqlimp`
+  falhar com `FOPN_ERR [12]`.
+- `faircom.extract_layout` extrai record length + DODA via `ctinfo.standalone`.
+- `doctor` agora também valida a utilidade `ctinfo`.
+
+### Changed
+- `read_info` / `read_all` usam o parser quando o arquivo tem assinatura
+  Protheus (fixed-length + flag de soft-delete no offset 0); caem para o
+  caminho c-tree (`ctsqlimp` + driver nativo) nos demais casos.
+
 ## [0.2.0] - 2026-05-29
 
 Realinhamento da arquitetura após validação contra o FairCom DB v13 real.

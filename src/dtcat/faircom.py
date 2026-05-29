@@ -23,11 +23,19 @@ import platform
 import re
 import shutil
 import subprocess
+from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 
 # Nome do servidor SQL padrão do FairCom DB (config: SERVER_NAME).
 DEFAULT_SERVER_NAME = "FAIRCOMS"
+
+# Nomes possíveis da utilidade ctinfo (extrai IFIL/DODA de um arquivo ISAM).
+# A variante .standalone roda sem o servidor — preferimos ela.
+_CTINFO_NAMES = {
+    "Windows": ("ctinfo.standalone.exe", "ctinfo.exe"),
+    "_default": ("ctinfo.standalone", "ctinfo"),
+}
 
 # Nomes possíveis do binário do servidor, por plataforma.
 _SERVER_BINARIES = {
@@ -134,6 +142,92 @@ def ctsqlimp_path(home: Path) -> Path | None:
             if p.is_file():
                 return p
     return None
+
+
+def ctinfo_path(home: Path) -> Path | None:
+    names = _CTINFO_NAMES.get(platform.system(), _CTINFO_NAMES["_default"])
+    for sub in ("tools", "bin"):
+        for n in names:
+            p = home / sub / n
+            if p.is_file():
+                return p
+    return None
+
+
+# --- extração de layout (DODA) via ctinfo --------------------------------
+
+
+@dataclass
+class FieldDef:
+    """Um campo do DODA: nome, offset no registro, tamanho em bytes, tipo c-tree."""
+
+    name: str
+    offset: int
+    length: int
+    ctype: str  # ex.: "FSTRING", "INT4U", "INT2", "CHAR"
+
+
+@dataclass
+class Layout:
+    """Layout físico de um arquivo ISAM fixed-length, extraído do DODA."""
+
+    record_length: int
+    is_fixed: bool
+    fields: list[FieldDef]
+
+    @property
+    def delete_field(self) -> FieldDef | None:
+        """Campo de soft-delete (D_E_L_E_T_*), se presente."""
+        for f in self.fields:
+            if f.name.replace("_", "").upper().startswith("DELET"):
+                return f
+        return None
+
+    @property
+    def is_protheus(self) -> bool:
+        """Assinatura Protheus: fixed-length com flag de delete no offset 0."""
+        d = self.delete_field
+        return self.is_fixed and d is not None and d.offset == 0
+
+
+_DODA_LINE = re.compile(r"^(\w+)\s+(\d+)\s+CT_(\w+)\s+\(\d+\)\s+(\d+)\s*$", re.MULTILINE)
+_RECLEN_RE = re.compile(r"Data record length\s*=\s*(\d+)")
+
+
+def extract_layout(arquivo: Path, home: Path | None = None) -> Layout | None:
+    """Extrai o layout (record length + DODA) de um arquivo ISAM via ctinfo.
+
+    Roda ``ctinfo.standalone`` (não precisa do servidor). Devolve ``Layout`` ou
+    ``None`` se não conseguir extrair (arquivo não é fixed-length, sem DODA, ou
+    ctinfo indisponível).
+    """
+    home = home or find_faircom_home()
+    if home is None:
+        return None
+    tool = ctinfo_path(home)
+    if tool is None:
+        return None
+    res = subprocess.run(
+        [str(tool), str(arquivo)],
+        capture_output=True,
+        text=True,
+        env=subprocess_env(home),
+        check=False,
+    )
+    out = res.stdout or ""
+    if "fixed-length data file" not in out:
+        return None  # variável ou ilegível → deixa pro fallback c-tree
+    m = _RECLEN_RE.search(out)
+    if not m:
+        return None
+    record_length = int(m.group(1))
+    fields = [
+        FieldDef(name=g[0], offset=int(g[1]), length=int(g[3]), ctype=g[2])
+        for g in _DODA_LINE.findall(out)
+    ]
+    if not fields:
+        return None
+    return Layout(record_length=record_length, is_fixed=True, fields=fields)
 
 
 def sql_dbs_dir(home: Path) -> Path:

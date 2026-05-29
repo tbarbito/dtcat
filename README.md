@@ -21,14 +21,19 @@ O dtcat é licenciado sob MIT e **não redistribui nenhum binário da FairCom**.
 
 ## Como funciona
 
-O c-tree ISAM é um formato de arquivo, não um banco em rede. Para lê-lo via SQL, o dtcat:
+O dtcat tem dois caminhos de leitura e escolhe o melhor para cada arquivo:
 
-1. Sobe (ou usa) um servidor FairCom DB local (`dtcat server start`).
-2. Para cada `.dtc`, **registra** o arquivo no dicionário SQL com a utilidade `ctsqlimp` — isso "linka" o arquivo **sem alterar os dados**. O arquivo precisa conter os recursos IFIL e DODA embutidos (arquivos ISAM exportados de aplicativos c-tree normalmente já contêm).
-3. Consulta a tabela resultante via driver nativo e exporta.
-4. Ao terminar, **desvincula** o arquivo do dicionário (os dados originais ficam intactos).
+### Caminho principal — parser DODA direto (sem servidor)
 
-Todo esse ciclo é automático em `dtcat info` / `export` / `batch`.
+Arquivos exportados de aplicativos c-tree (ex.: rotinas tipo APSDU) costumam vir como **dados puros, fixed-length, sem o índice** — o índice referenciado internamente (IFIL) aponta para um caminho do servidor de origem, que não existe na sua máquina. Por isso o caminho c-tree puro (abrir a tabela) falha (`FOPN_ERR`).
+
+O dtcat resolve lendo **direto do layout físico**: a utilidade `ctinfo` extrai o DODA (offsets, tipos e tamanhos dos campos) e o dtcat parseia os registros fixed-length, decodificando cp1252. **Não precisa do servidor SQL nem do índice** — basta `dtcat info` / `export`.
+
+### Fallback — c-tree via ctsqlimp (quando o índice existe)
+
+Para arquivos que não casam com a assinatura fixed-length (ou que tragam o índice), o dtcat sobe um servidor FairCom local (`dtcat server start`), **registra** o arquivo no dicionário SQL com `ctsqlimp` (linka **sem alterar os dados**), consulta via driver nativo e depois **desvincula**.
+
+Em ambos os caminhos os dados originais nunca são modificados.
 
 ## Obtenha o FairCom DB Developer Edition (gratuito)
 
