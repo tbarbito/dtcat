@@ -88,8 +88,8 @@ if ! grep -q "FAIRCOM_HOME" "$SHELL_RC" 2>/dev/null; then
 
 # Added by dtcat install-faircom.sh
 export FAIRCOM_HOME="$TARGET"
-export PATH="\$FAIRCOM_HOME/bin:\$PATH"
-export ${LIB_VAR}="\$FAIRCOM_HOME/lib:\$${LIB_VAR}"
+export PATH="\$FAIRCOM_HOME/tools:\$PATH"
+export ${LIB_VAR}="\$FAIRCOM_HOME/server:\$${LIB_VAR}"
 EOF
     echo "Environment variables added to $SHELL_RC"
 else
@@ -102,10 +102,14 @@ cat <<EOF
   Installation complete
 ================================================================
 
+dtcat uses FairCom's native Python driver — no unixODBC/DSN setup needed.
+
 Next steps:
-  1. Reload shell:           source $SHELL_RC
-  2. Configure ctsrvr.cfg:   see docs/setup-$([ "$OS" = "Darwin" ] && echo macos || echo linux).md
-  3. Configure ODBC DSN:     see same doc
-  4. Validate:               dtcat doctor
+  1. Reload shell:      source $SHELL_RC
+  2. Validate:          dtcat doctor
+  3. Start the server:  dtcat server start
+  4. Read a file:       dtcat info /path/to/file.dtc
+
+See docs/setup-$([ "$OS" = "Darwin" ] && echo macos || echo linux).md for details.
 
 EOF

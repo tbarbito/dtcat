@@ -44,7 +44,7 @@ def main(
 
 @app.command()
 def doctor() -> None:
-    """Valida pré-requisitos: FairCom, ODBC driver, server local."""
+    """Valida pré-requisitos: FairCom, driver nativo, ctsqlimp, servidor."""
     ok = run_doctor(console)
     raise typer.Exit(code=0 if ok else 1)
 

@@ -53,14 +53,6 @@ jobs:
       - name: Set up Python ${{ matrix.python }}
         run: uv python install ${{ matrix.python }}
 
-      - name: Install system deps (Linux)
-        if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y unixodbc unixodbc-dev
-
-      - name: Install system deps (macOS)
-        if: runner.os == 'macOS'
-        run: brew install unixodbc
-
       - name: Sync deps
         run: uv sync --frozen --python ${{ matrix.python }}
 

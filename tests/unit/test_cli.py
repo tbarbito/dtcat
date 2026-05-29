@@ -56,10 +56,8 @@ class TestDoctor:
         assert "FAIL" in result.stdout
 
     def test_doctor_passes_when_env_complete(
-        self, runner: CliRunner, fake_faircom_home: Path, mocker
+        self, runner: CliRunner, fake_faircom_home: Path
     ) -> None:
-        mocker.patch("dtcat.doctor.pyodbc.drivers", return_value=["c-tree ODBC Driver"])
-        mocker.patch("dtcat.doctor.shutil.which", return_value="/usr/bin/isql")
         result = runner.invoke(app, ["doctor"])
         assert result.exit_code == 0
         assert "FAIL" not in result.stdout

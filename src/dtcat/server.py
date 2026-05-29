@@ -1,4 +1,4 @@
-"""Gerência do c-tree Server local (start / stop / status)."""
+"""Gerência do servidor FairCom DB local (start / stop / status)."""
 
 from __future__ import annotations
 
@@ -10,32 +10,14 @@ from pathlib import Path
 
 from rich.console import Console
 
-DEFAULT_PORT = 6597
-PID_FILE = Path.home() / ".dtcat" / "ctreesql.pid"
+from dtcat import faircom
+
+PID_FILE = Path.home() / ".dtcat" / "faircom.pid"
 
 
-def _faircom_home() -> Path | None:
-    env = os.environ.get("FAIRCOM_HOME") or os.environ.get("CTREE_HOME")
-    if env and Path(env).is_dir():
-        return Path(env)
-    for c in [
-        Path.home() / "faircom",
-        Path("/opt/faircom"),
-        Path("/usr/local/faircom"),
-        Path("C:/FairCom"),
-    ]:
-        if c.is_dir():
-            return c
-    return None
-
-
-def _server_binary() -> Path | None:
-    home = _faircom_home()
-    if home is None:
-        return None
-    is_win = platform.system() == "Windows"
-    name = "ctreesql.exe" if is_win else "ctreesql"
-    for sub in ("bin", "server"):
+def _ctstop_path(home: Path) -> Path | None:
+    name = "ctstop.exe" if platform.system() == "Windows" else "ctstop"
+    for sub in ("tools", "bin"):
         p = home / sub / name
         if p.is_file():
             return p
@@ -47,20 +29,22 @@ def server_start(console: Console) -> None:
         pid = PID_FILE.read_text().strip()
         console.print(f"[yellow]Já existe um PID file ({pid}).[/] Use 'dtcat server status'.")
         return
-    binary = _server_binary()
+    home = faircom.find_faircom_home()
+    binary = faircom.server_binary(home) if home else None
     if binary is None:
-        console.print("[red]ctreesql não encontrado.[/] Rode 'dtcat doctor' para diagnosticar.")
+        console.print("[red]Binário do servidor FairCom não encontrado.[/] Rode 'dtcat doctor'.")
         raise SystemExit(1)
     PID_FILE.parent.mkdir(parents=True, exist_ok=True)
     proc = subprocess.Popen(
         [str(binary)],
-        cwd=binary.parent,
+        cwd=binary.parent,  # o servidor resolve caminhos relativos a partir daqui
+        env=faircom.subprocess_env(home),
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
         start_new_session=True,
     )
     PID_FILE.write_text(str(proc.pid))
-    console.print(f"[green]ctreesql iniciado[/] (pid {proc.pid})")
+    console.print(f"[green]Servidor FairCom iniciado[/] (pid {proc.pid})")
 
 
 def server_stop(console: Console) -> None:
@@ -68,12 +52,32 @@ def server_stop(console: Console) -> None:
         console.print("[yellow]Sem PID file — server não foi iniciado pelo dtcat.[/]")
         return
     pid = int(PID_FILE.read_text().strip())
+    home = faircom.find_faircom_home()
+    ctstop = _ctstop_path(home) if home else None
     try:
-        if platform.system() == "Windows":
+        if ctstop is not None:
+            # shutdown limpo: ctstop -AUTO <user> <pwd> <server>@<host>
+            p = faircom.conn_params()
+            subprocess.run(
+                [
+                    str(ctstop),
+                    "-AUTO",
+                    p["user"],
+                    p["password"],
+                    f"{faircom.server_name()}@{p['host']}",
+                ],
+                env=faircom.subprocess_env(home),
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            console.print(f"[green]Servidor FairCom encerrado[/] (ctstop, pid {pid})")
+        elif platform.system() == "Windows":
             subprocess.run(["taskkill", "/F", "/PID", str(pid)], check=False)
+            console.print(f"[green]Servidor FairCom encerrado[/] (pid {pid})")
         else:
             os.kill(pid, signal.SIGTERM)
-        console.print(f"[green]ctreesql encerrado[/] (pid {pid})")
+            console.print(f"[green]Servidor FairCom encerrado[/] (pid {pid})")
     except ProcessLookupError:
         console.print(f"[yellow]Processo {pid} não estava rodando.[/]")
     finally:
@@ -85,8 +89,7 @@ def server_status(console: Console) -> None:
         console.print("[red]●[/] parado (sem PID file)")
         return
     pid = int(PID_FILE.read_text().strip())
-    alive = _pid_alive(pid)
-    if alive:
+    if _pid_alive(pid):
         console.print(f"[green]●[/] rodando (pid {pid})")
     else:
         console.print(f"[yellow]●[/] PID file aponta {pid} mas processo não existe — limpando.")

@@ -73,10 +73,13 @@ switch ($ext) {
 
 [Environment]::SetEnvironmentVariable("FAIRCOM_HOME", $Target, "User")
 $currentPath = [Environment]::GetEnvironmentVariable("Path", "User")
-$binPath = "$Target\bin"
-if ($currentPath -notlike "*$binPath*") {
-    [Environment]::SetEnvironmentVariable("Path", "$currentPath;$binPath", "User")
+# server\ contém a ctsqlapi.dll (lib nativa); tools\ contém ctsqlimp.exe
+foreach ($p in @("$Target\server", "$Target\tools")) {
+    if ($currentPath -notlike "*$p*") {
+        $currentPath = "$currentPath;$p"
+    }
 }
+[Environment]::SetEnvironmentVariable("Path", $currentPath, "User")
 
 Write-Host @"
 
@@ -84,10 +87,14 @@ Write-Host @"
   Installation complete
 ================================================================
 
+dtcat uses FairCom's native Python driver — no ODBC/DSN setup needed.
+
 Next steps:
   1. Open a NEW PowerShell window (so env vars are picked up)
-  2. Configure ctsrvr.cfg:   see docs\setup-windows.md
-  3. Configure ODBC DSN:     ODBC Data Sources (64-bit)
-  4. Validate:               dtcat doctor
+  2. Validate:          dtcat doctor
+  3. Start the server:  dtcat server start
+  4. Read a file:       dtcat info C:\path\to\file.dtc
+
+See docs\setup-windows.md for details.
 
 "@

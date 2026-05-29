@@ -2,11 +2,14 @@
 
 Guia passo a passo para deixar o **dtcat** funcionando no Linux.
 
+> O dtcat usa o **driver Python nativo** que acompanha o FairCom DB. **Não é
+> necessário unixODBC nem configurar DSN.**
+
 ## 1. Pacotes do sistema
 
 ```bash
 sudo apt update
-sudo apt install -y unixodbc unixodbc-dev curl tar python3-pip
+sudo apt install -y curl tar python3-pip
 ```
 
 ## 2. FairCom DB Developer Edition
@@ -30,104 +33,85 @@ Ele abre o formulário de download no seu navegador, pede o caminho do arquivo b
 
 ```bash
 mkdir -p ~/faircom
-tar xzf ~/Downloads/faircom-db-linux-*.tar.gz -C ~/faircom --strip-components=1
+tar xzf ~/Downloads/FairCom-DB.linux.*.tar.gz -C ~/faircom --strip-components=1
 
-# ambiente
+# ambiente — aponta para o diretório do servidor (contém libctsqlapi.so)
 cat >> ~/.bashrc << 'EOF'
 export FAIRCOM_HOME="$HOME/faircom"
-export PATH="$FAIRCOM_HOME/bin:$PATH"
-export LD_LIBRARY_PATH="$FAIRCOM_HOME/lib:$LD_LIBRARY_PATH"
+export LD_LIBRARY_PATH="$FAIRCOM_HOME/server:$LD_LIBRARY_PATH"
 EOF
 source ~/.bashrc
 ```
 
-## 3. Configure o servidor c-tree
+> O dtcat também carrega a lib nativa por caminho absoluto, então em geral
+> funciona mesmo sem `LD_LIBRARY_PATH`. Defini-la apenas torna o ambiente mais
+> previsível e ajuda outras ferramentas do FairCom (ex.: `ctsqlimp`).
 
-Edite `$FAIRCOM_HOME/config/ctsrvr.cfg`:
+### Estrutura relevante da instalação
 
-```ini
-SERVER_NAME       DTCAT
-LOCAL_DIRECTORY   /home/SEU_USUARIO/.dtcat/inbox/
-COMM_PROTOCOL     F_TCPIP
-SQL_PORT          6597
-```
+| Caminho | O que é |
+|---|---|
+| `~/faircom/server/faircom` | binário do servidor SQL |
+| `~/faircom/server/libctsqlapi.so` | lib nativa do client SQL |
+| `~/faircom/drivers/python.sql/pyctree.py` | driver Python nativo (DB-API 2.0) |
+| `~/faircom/tools/ctsqlimp` | utilidade que registra arquivos ISAM como tabela SQL |
+| `~/faircom/data/ctreeSQL.dbs/` | diretório de trabalho SQL do servidor |
 
-Crie o diretório inbox:
-
-```bash
-mkdir -p ~/.dtcat/inbox
-```
-
-## 4. Driver ODBC
-
-O driver vem dentro do tarball da FairCom (geralmente `lib/libctreeodbc.so`). Registre-o no unixODBC.
-
-`/etc/odbcinst.ini`:
-
-```ini
-[c-tree ODBC Driver]
-Description = c-tree ODBC Driver
-Driver      = /home/SEU_USUARIO/faircom/lib/libctreeodbc.so
-Setup       = /home/SEU_USUARIO/faircom/lib/libctreeodbc.so
-FileUsage   = 1
-```
-
-`/etc/odbc.ini` (ou `~/.odbc.ini`):
-
-```ini
-[dtcat]
-Description = dtcat DSN
-Driver      = c-tree ODBC Driver
-Host        = localhost
-Port        = 6597
-Database    = ctreeMainDB
-```
-
-Teste o DSN:
-
-```bash
-isql -v dtcat admin ADMIN
-# deve abrir um prompt SQL; digite `quit` para sair
-```
-
-## 5. Instale o dtcat
+## 3. Instale o dtcat
 
 ```bash
 uv tool install dtcat
 ```
 
-## 6. Valide
+## 4. Valide
 
 ```bash
 dtcat doctor
 ```
 
-Todas as verificações devem reportar **OK**.
+Todas as verificações devem reportar **OK** (Python, FairCom, lib nativa, driver pyctree, binário do servidor e ctsqlimp).
 
-## 7. Uso típico
+## 5. Uso típico
 
 ```bash
-# Coloque um arquivo .dtc na inbox
-cp ~/Downloads/data.dtc ~/.dtcat/inbox/
-
-# Inicie o servidor (em background)
+# 1. Inicie o servidor FairCom local (uma vez por sessão)
 dtcat server start
+dtcat server status
 
-# Inspecione
-dtcat info ~/.dtcat/inbox/data.dtc
+# 2. Inspecione um arquivo .dtc
+dtcat info ~/Downloads/clientes.dtc
 
-# Exporte
-dtcat export ~/.dtcat/inbox/data.dtc -f csv -o ~/out/data.csv
+# 3. Exporte
+dtcat export ~/Downloads/clientes.dtc -f csv -o ~/out/clientes.csv
 
-# Pare o servidor
+# 4. Lote: pasta inteira
+dtcat batch ~/inbox/ -f csv -o ~/out/
+
+# 5. Pare o servidor quando terminar
 dtcat server stop
 ```
+
+O `dtcat` registra cada `.dtc` no dicionário SQL (via `ctsqlimp`), lê e depois
+desvincula automaticamente — os dados originais não são alterados.
+
+## Conexão (avançado)
+
+Os defaults batem com a instalação padrão do FairCom DB. Sobrescreva via env se necessário:
+
+| Variável | Padrão |
+|---|---|
+| `DTCAT_HOST` | `127.0.0.1` |
+| `DTCAT_PORT` | `6597` |
+| `DTCAT_DATABASE` | `ctreeSQL` |
+| `DTCAT_USER` | `ADMIN` |
+| `DTCAT_PASSWORD` | `ADMIN` |
+| `DTCAT_SERVER` | `FAIRCOMS` |
 
 ## Solução de problemas
 
 | Erro | Causa | Correção |
 |---|---|---|
-| `libctreeodbc.so: cannot open shared object file` | `LD_LIBRARY_PATH` não definido | `export LD_LIBRARY_PATH=$FAIRCOM_HOME/lib:$LD_LIBRARY_PATH` |
-| `IM002 Data source name not found` | DSN ausente em `/etc/odbc.ini` | Repita o passo 4 |
-| `08001 Server not found` | Servidor não está rodando | `dtcat server start` |
-| `isql: command not found` | unixODBC não instalado | `sudo apt install unixodbc` |
+| `FairCom DB não encontrado` | `FAIRCOM_HOME` não definido | `export FAIRCOM_HOME=$HOME/faircom` |
+| `libctsqlapi.so: cannot open shared object file` | lib fora do path | `export LD_LIBRARY_PATH=$FAIRCOM_HOME/server:$LD_LIBRARY_PATH` |
+| `ctsqlimp falhou ao registrar` | servidor parado ou arquivo sem IFIL/DODA | `dtcat server start`; confirme a origem/integridade do `.dtc` |
+| `Table/View/Synonym ... not found` | registro não concluído | rode `dtcat doctor`; verifique o log em `~/faircom/server/server.log` |

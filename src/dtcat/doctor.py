@@ -1,50 +1,14 @@
-"""Validação de pré-requisitos: FairCom DB, driver ODBC, c-tree Server local."""
+"""Validação de pré-requisitos: FairCom DB, driver nativo, ctsqlimp, servidor."""
 
 from __future__ import annotations
 
-import os
-import platform
-import shutil
 import sys
 from pathlib import Path
 
 from rich.console import Console
 from rich.table import Table
 
-try:
-    import pyodbc
-except ImportError:  # pragma: no cover - pyodbc é dependência declarada
-    pyodbc = None  # type: ignore[assignment]
-
-
-def _find_faircom_home() -> Path | None:
-    env = os.environ.get("FAIRCOM_HOME") or os.environ.get("CTREE_HOME")
-    if env and Path(env).is_dir():
-        return Path(env)
-    candidates = [
-        Path.home() / "faircom",
-        Path("/opt/faircom"),
-        Path("/usr/local/faircom"),
-        Path("C:/FairCom"),
-        Path("C:/Program Files/FairCom"),
-    ]
-    for c in candidates:
-        if c.is_dir():
-            return c
-    return None
-
-
-def _check_odbc() -> tuple[bool, str]:
-    if pyodbc is None:
-        return False, "pyodbc não instalado (rode: uv tool install dtcat)"
-    drivers = pyodbc.drivers()
-    faircom_drivers = [d for d in drivers if "c-tree" in d.lower() or "faircom" in d.lower()]
-    if not faircom_drivers:
-        return (
-            False,
-            f"driver ODBC FairCom não encontrado. Drivers disponíveis: {drivers or '[nenhum]'}",
-        )
-    return True, f"OK ({', '.join(faircom_drivers)})"
+from dtcat import faircom
 
 
 def _check_python() -> tuple[bool, str]:
@@ -53,47 +17,60 @@ def _check_python() -> tuple[bool, str]:
     return ok, f"Python {ver.major}.{ver.minor}.{ver.micro}"
 
 
-def _check_faircom() -> tuple[bool, str]:
-    home = _find_faircom_home()
+def _check_faircom(home: Path | None) -> tuple[bool, str]:
     if home is None:
         return (
             False,
-            "FairCom DB não encontrado (defina FAIRCOM_HOME ou veja docs/setup-{linux,windows}.md)",
+            "FairCom DB não encontrado (defina FAIRCOM_HOME ou veja docs/setup-linux.md)",
         )
     return True, str(home)
+
+
+def _check_native_lib(home: Path | None) -> tuple[bool, str]:
+    if home is None:
+        return False, "skipped (FairCom não encontrado)"
+    lib = faircom.native_lib_path(home)
+    if lib is None:
+        return False, f"{faircom.native_lib_name()} não localizado dentro do FAIRCOM_HOME"
+    return True, str(lib)
+
+
+def _check_native_driver(home: Path | None) -> tuple[bool, str]:
+    if home is None:
+        return False, "skipped (FairCom não encontrado)"
+    drv = faircom.native_driver_dir(home)
+    if drv is None:
+        return False, "driver Python nativo (pyctree) não localizado em drivers/python.sql"
+    return True, str(drv)
 
 
 def _check_server_binary(home: Path | None) -> tuple[bool, str]:
     if home is None:
         return False, "skipped (FairCom não encontrado)"
-    candidates = [
-        home / "bin" / "ctreesql",
-        home / "server" / "ctreesql",
-        home / "bin" / "ctreesql.exe",
-        home / "server" / "ctreesql.exe",
-    ]
-    for c in candidates:
-        if c.is_file():
-            return True, str(c)
-    return False, "binário ctreesql não localizado dentro do FAIRCOM_HOME"
+    binary = faircom.server_binary(home)
+    if binary is None:
+        return False, "binário do servidor (faircom/ctreesql) não localizado"
+    return True, str(binary)
 
 
-def _check_isql() -> tuple[bool, str]:
-    if platform.system() == "Windows":
-        return True, "skipped (Windows)"
-    if shutil.which("isql"):
-        return True, "OK"
-    return False, "isql não encontrado (apt install unixodbc)"
+def _check_ctsqlimp(home: Path | None) -> tuple[bool, str]:
+    if home is None:
+        return False, "skipped (FairCom não encontrado)"
+    tool = faircom.ctsqlimp_path(home)
+    if tool is None:
+        return False, "utilidade ctsqlimp não localizada em tools/"
+    return True, str(tool)
 
 
 def run_doctor(console: Console) -> bool:
-    home = _find_faircom_home()
+    home = faircom.find_faircom_home()
     checks = [
         ("Python ≥ 3.11", _check_python()),
-        ("FairCom DB instalado", _check_faircom()),
-        ("Binário ctreesql", _check_server_binary(home)),
-        ("Driver ODBC FairCom", _check_odbc()),
-        ("unixODBC (isql)", _check_isql()),
+        ("FairCom DB instalado", _check_faircom(home)),
+        ("Lib nativa do client SQL", _check_native_lib(home)),
+        ("Driver Python nativo (pyctree)", _check_native_driver(home)),
+        ("Binário do servidor", _check_server_binary(home)),
+        ("Utilidade ctsqlimp", _check_ctsqlimp(home)),
     ]
     table = Table(title="dtcat doctor", show_lines=False)
     table.add_column("Check", style="bold")
@@ -109,6 +86,7 @@ def run_doctor(console: Console) -> bool:
         console.print(
             "\n[yellow]Para configurar o ambiente, veja:[/]\n"
             "  Linux:   docs/setup-linux.md\n"
-            "  Windows: docs/setup-windows.md"
+            "  Windows: docs/setup-windows.md\n"
+            "  macOS:   docs/setup-macos.md"
         )
     return all_ok

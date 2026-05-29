@@ -2,6 +2,9 @@
 
 Guia passo a passo para deixar o **dtcat** funcionando no Windows.
 
+> O dtcat usa o **driver Python nativo** que acompanha o FairCom DB. **Não é
+> necessário configurar DSN ODBC.**
+
 ## 1. Python e uv
 
 Instale o Python 3.11+ a partir de https://python.org/downloads (marque "Add to PATH" durante a instalação).
@@ -30,50 +33,28 @@ Ou use o instalador assistido:
 ### Instalação manual
 
 1. Execute o `.msi`, aceite os padrões (caminho típico: `C:\FairCom\V<versão>`)
-2. Defina a variável de ambiente:
+2. Defina as variáveis de ambiente:
    - **Configurações → Sistema → Sobre → Configurações avançadas do sistema → Variáveis de Ambiente**
    - Nova variável de usuário: `FAIRCOM_HOME` = `C:\FairCom\V13.0.0` (ajuste para a sua versão)
+   - Adicione `%FAIRCOM_HOME%\server` ao `PATH` (para a `ctsqlapi.dll`)
 
-## 3. Configure o servidor c-tree
+### Estrutura relevante da instalação
 
-Edite `%FAIRCOM_HOME%\config\ctsrvr.cfg`:
+| Caminho | O que é |
+|---|---|
+| `%FAIRCOM_HOME%\server\faircom.exe` | binário do servidor SQL |
+| `%FAIRCOM_HOME%\server\ctsqlapi.dll` | lib nativa do client SQL |
+| `%FAIRCOM_HOME%\drivers\python.sql\pyctree.py` | driver Python nativo (DB-API 2.0) |
+| `%FAIRCOM_HOME%\tools\ctsqlimp.exe` | utilidade que registra arquivos ISAM como tabela SQL |
+| `%FAIRCOM_HOME%\data\ctreeSQL.dbs\` | diretório de trabalho SQL do servidor |
 
-```ini
-SERVER_NAME       DTCAT
-LOCAL_DIRECTORY   C:\Users\SEU_USUARIO\.dtcat\inbox\
-COMM_PROTOCOL     F_TCPIP
-SQL_PORT          6597
-```
-
-Crie a pasta inbox (PowerShell):
-
-```powershell
-mkdir $env:USERPROFILE\.dtcat\inbox
-```
-
-## 4. Driver ODBC
-
-O `.msi` já registra o driver. Crie um DSN:
-
-1. Abra o **ODBC Data Sources (64-bit)** pelo menu Iniciar
-2. Aba **System DSN** → **Add**
-3. Escolha **c-tree ODBC Driver** → Finish
-4. Preencha:
-   - Data Source Name: `dtcat`
-   - Host: `localhost`
-   - Database: `ctreeMainDB`
-   - Service: `6597`
-   - User ID: `admin`
-   - Password: `ADMIN`
-5. OK
-
-## 5. Instale o dtcat
+## 3. Instale o dtcat
 
 ```powershell
 uv tool install dtcat
 ```
 
-## 6. Valide
+## 4. Valide
 
 ```powershell
 dtcat doctor
@@ -81,30 +62,42 @@ dtcat doctor
 
 Todas as verificações devem reportar **OK**.
 
-## 7. Uso típico
+## 5. Uso típico
 
 ```powershell
-# Coloque um arquivo .dtc na inbox
-Copy-Item $env:USERPROFILE\Downloads\data.dtc $env:USERPROFILE\.dtcat\inbox\
-
-# Inicie o servidor
+# 1. Inicie o servidor FairCom local
 dtcat server start
+dtcat server status
 
-# Inspecione
-dtcat info $env:USERPROFILE\.dtcat\inbox\data.dtc
+# 2. Inspecione um .dtc
+dtcat info $env:USERPROFILE\Downloads\clientes.dtc
 
-# Exporte
-dtcat export $env:USERPROFILE\.dtcat\inbox\data.dtc -f xlsx -o data.xlsx
+# 3. Exporte
+dtcat export $env:USERPROFILE\Downloads\clientes.dtc -f xlsx -o clientes.xlsx
 
-# Pare o servidor
+# 4. Pare o servidor
 dtcat server stop
 ```
+
+O `dtcat` registra cada `.dtc` no dicionário SQL (via `ctsqlimp`), lê e depois
+desvincula automaticamente — os dados originais não são alterados.
+
+## Conexão (avançado)
+
+| Variável | Padrão |
+|---|---|
+| `DTCAT_HOST` | `127.0.0.1` |
+| `DTCAT_PORT` | `6597` |
+| `DTCAT_DATABASE` | `ctreeSQL` |
+| `DTCAT_USER` | `ADMIN` |
+| `DTCAT_PASSWORD` | `ADMIN` |
+| `DTCAT_SERVER` | `FAIRCOMS` |
 
 ## Solução de problemas
 
 | Erro | Causa | Correção |
 |---|---|---|
-| `IM002 Data source name not found` | DSN ausente | Refaça o passo 4 — use explicitamente o Administrador ODBC de 64-bit |
-| `08001 Server not found` | Servidor não está rodando | `dtcat server start` |
-| `Architecture mismatch` | DSN criado no ODBC de 32-bit | Use explicitamente o **ODBC Data Sources (64-bit)** |
-| `Access denied` ao iniciar o servidor | Permissão na pasta inbox | Rode o PowerShell como Administrador ou ajuste as ACLs |
+| `FairCom DB não encontrado` | `FAIRCOM_HOME` não definido | defina a variável de usuário `FAIRCOM_HOME` |
+| `ctsqlapi.dll não encontrada` | `server\` fora do PATH | adicione `%FAIRCOM_HOME%\server` ao PATH |
+| `ctsqlimp falhou ao registrar` | servidor parado ou arquivo sem IFIL/DODA | `dtcat server start`; confirme a origem do `.dtc` |
+| `Access denied` ao iniciar o servidor | permissão no diretório de dados | rode o PowerShell como Administrador |

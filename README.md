@@ -13,9 +13,22 @@ Leitor e exportador standalone para arquivos de dados **c-tree ISAM** (`.dtc` e 
 
 ## Por que uma instalação separada do FairCom?
 
-O formato de arquivo c-tree ISAM é proprietário da **FairCom Corporation** e não existe um parser open-source maduro. O dtcat é uma camada Python fina que usa o driver ODBC da FairCom para acessar os arquivos — mesmo modelo do `psycopg2` que exige o `libpq`.
+O formato de arquivo c-tree ISAM é proprietário da **FairCom Corporation** e não existe um parser open-source maduro. O dtcat é uma camada Python fina sobre o **driver Python nativo** (`pyctree`, DB-API 2.0) que acompanha o FairCom DB — carregado em runtime de `$FAIRCOM_HOME`. Mesmo modelo do `psycopg2`, que precisa do `libpq` instalado.
+
+> Por usar o driver nativo, o dtcat **não exige unixODBC nem configuração de DSN**.
 
 O dtcat é licenciado sob MIT e **não redistribui nenhum binário da FairCom**. Você instala o FairCom DB Developer Edition (gratuito para desenvolvimento) diretamente da FairCom, uma vez por máquina.
+
+## Como funciona
+
+O c-tree ISAM é um formato de arquivo, não um banco em rede. Para lê-lo via SQL, o dtcat:
+
+1. Sobe (ou usa) um servidor FairCom DB local (`dtcat server start`).
+2. Para cada `.dtc`, **registra** o arquivo no dicionário SQL com a utilidade `ctsqlimp` — isso "linka" o arquivo **sem alterar os dados**. O arquivo precisa conter os recursos IFIL e DODA embutidos (arquivos ISAM exportados de aplicativos c-tree normalmente já contêm).
+3. Consulta a tabela resultante via driver nativo e exporta.
+4. Ao terminar, **desvincula** o arquivo do dicionário (os dados originais ficam intactos).
+
+Todo esse ciclo é automático em `dtcat info` / `export` / `batch`.
 
 ## Obtenha o FairCom DB Developer Edition (gratuito)
 
@@ -100,9 +113,12 @@ dtcat server stop
 | Variável | Padrão | Descrição |
 |---|---|---|
 | `FAIRCOM_HOME` | autodetect | Diretório de instalação do FairCom |
-| `DTCAT_DSN` | `dtcat` | Nome do DSN ODBC |
-| `DTCAT_USER` | `admin` | Usuário c-tree |
+| `DTCAT_HOST` | `127.0.0.1` | Host do servidor SQL |
+| `DTCAT_PORT` | `6597` | Porta SQL do servidor |
+| `DTCAT_DATABASE` | `ctreeSQL` | Banco SQL |
+| `DTCAT_USER` | `ADMIN` | Usuário c-tree |
 | `DTCAT_PASSWORD` | `ADMIN` | Senha c-tree |
+| `DTCAT_SERVER` | `FAIRCOMS` | Nome do servidor (ctsqlimp) |
 
 ## Encoding
 
