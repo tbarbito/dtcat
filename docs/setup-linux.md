@@ -1,64 +1,79 @@
-# Setup Linux (Ubuntu 22.04+/24.04)
+# Setup on Linux (Ubuntu 22.04+ / 24.04)
 
-Guia passo-a-passo para deixar o `dtcat` pronto pra rodar em Linux.
+Step-by-step guide to get **dtcat** working on Linux.
 
-## 1. Pacotes do sistema
+## 1. System packages
 
 ```bash
 sudo apt update
-sudo apt install -y unixodbc unixodbc-dev curl tar
+sudo apt install -y unixodbc unixodbc-dev curl tar python3-pip
 ```
 
 ## 2. FairCom DB Developer Edition
 
-1. Cadastrar em https://www.faircom.com/download-ctreeace (form com nome/email/empresa)
-2. Receber link por email → baixar build **Linux x86_64**
-3. Extrair pra `~/faircom` (ou `/opt/faircom`):
+dtcat **does not bundle** FairCom binaries. Download the Developer Edition directly:
+
+- **Sign-up form:** https://www.faircom.com/download-ctreeace
+- **All FairCom downloads:** https://www.faircom.com/products/downloads
+
+Fill out the form (name, email, company, country) → receive an email → download the **Linux x86_64** build (`.tar.gz`).
+
+Or use the assisted installer:
+
+```bash
+./scripts/install-faircom.sh
+```
+
+It opens the download form in your browser, prompts for the path of the downloaded file, extracts to `~/faircom`, and configures environment variables.
+
+### Manual install
 
 ```bash
 mkdir -p ~/faircom
 tar xzf ~/Downloads/faircom-db-linux-*.tar.gz -C ~/faircom --strip-components=1
-```
 
-4. Exportar `FAIRCOM_HOME`:
-
-```bash
-echo 'export FAIRCOM_HOME=$HOME/faircom' >> ~/.bashrc
-echo 'export PATH=$FAIRCOM_HOME/bin:$PATH' >> ~/.bashrc
+# environment
+cat >> ~/.bashrc << 'EOF'
+export FAIRCOM_HOME="$HOME/faircom"
+export PATH="$FAIRCOM_HOME/bin:$PATH"
+export LD_LIBRARY_PATH="$FAIRCOM_HOME/lib:$LD_LIBRARY_PATH"
+EOF
 source ~/.bashrc
 ```
 
-## 3. Configurar o c-tree Server
+## 3. Configure the c-tree server
 
-Editar `$FAIRCOM_HOME/config/ctsrvr.cfg`:
+Edit `$FAIRCOM_HOME/config/ctsrvr.cfg`:
 
 ```ini
 SERVER_NAME       DTCAT
-LOCAL_DIRECTORY   /home/SEU_USER/.dtcat/inbox/
+LOCAL_DIRECTORY   /home/YOUR_USER/.dtcat/inbox/
 COMM_PROTOCOL     F_TCPIP
 SQL_PORT          6597
 ```
 
-Criar a pasta inbox:
+Create the inbox directory:
 
 ```bash
 mkdir -p ~/.dtcat/inbox
 ```
 
-## 4. Driver ODBC FairCom
+## 4. ODBC driver
 
-O driver vem no mesmo pacote (geralmente `lib/libctreeodbc.so`). Registrar no unixODBC:
+The driver ships inside the FairCom tarball (usually `lib/libctreeodbc.so`). Register it with unixODBC.
 
 `/etc/odbcinst.ini`:
+
 ```ini
 [c-tree ODBC Driver]
-Description = FairCom c-tree ODBC Driver
-Driver      = /home/SEU_USER/faircom/lib/libctreeodbc.so
-Setup       = /home/SEU_USER/faircom/lib/libctreeodbc.so
+Description = c-tree ODBC Driver
+Driver      = /home/YOUR_USER/faircom/lib/libctreeodbc.so
+Setup       = /home/YOUR_USER/faircom/lib/libctreeodbc.so
 FileUsage   = 1
 ```
 
-`/etc/odbc.ini` (ou `~/.odbc.ini`):
+`/etc/odbc.ini` (or `~/.odbc.ini`):
+
 ```ini
 [dtcat]
 Description = dtcat DSN
@@ -68,52 +83,51 @@ Port        = 6597
 Database    = ctreeMainDB
 ```
 
-Testar:
+Test the DSN:
 
 ```bash
 isql -v dtcat admin ADMIN
+# should open a SQL prompt; type `quit` to exit
 ```
 
-Deve abrir o prompt SQL. `quit` pra sair.
-
-## 5. Instalar dtcat
+## 5. Install dtcat
 
 ```bash
 uv tool install dtcat
 ```
 
-## 6. Validar
+## 6. Validate
 
 ```bash
 dtcat doctor
 ```
 
-Deve retornar **OK** em todos os checks.
+All checks should report **OK**.
 
-## 7. Uso típico
+## 7. Typical usage
 
 ```bash
-# Colocar o .dtc na pasta inbox configurada acima
-cp ~/Downloads/SX3010.dtc ~/.dtcat/inbox/
+# Drop a .dtc file into the inbox
+cp ~/Downloads/data.dtc ~/.dtcat/inbox/
 
-# Subir o server
+# Start the server (background)
 dtcat server start
 
-# Inspecionar
-dtcat info ~/.dtcat/inbox/SX3010.dtc
+# Inspect
+dtcat info ~/.dtcat/inbox/data.dtc
 
-# Exportar
-dtcat export ~/.dtcat/inbox/SX3010.dtc -f csv -o ~/out/sx3.csv
+# Export
+dtcat export ~/.dtcat/inbox/data.dtc -f csv -o ~/out/data.csv
 
-# Derrubar o server
+# Stop the server
 dtcat server stop
 ```
 
 ## Troubleshooting
 
-| Erro | Causa | Solução |
+| Error | Cause | Fix |
 |---|---|---|
-| `libctreeodbc.so: cannot open shared object file` | LD_LIBRARY_PATH | `export LD_LIBRARY_PATH=$FAIRCOM_HOME/lib:$LD_LIBRARY_PATH` |
-| `IM002 Data source name not found` | DSN ausente em `/etc/odbc.ini` | Repetir passo 4 |
-| `08001 Server not found` | Server não iniciado | `dtcat server start` |
-| `isql: command not found` | unixODBC ausente | `sudo apt install unixodbc` |
+| `libctreeodbc.so: cannot open shared object file` | `LD_LIBRARY_PATH` not set | `export LD_LIBRARY_PATH=$FAIRCOM_HOME/lib:$LD_LIBRARY_PATH` |
+| `IM002 Data source name not found` | DSN missing in `/etc/odbc.ini` | Repeat step 4 |
+| `08001 Server not found` | Server not running | `dtcat server start` |
+| `isql: command not found` | unixODBC not installed | `sudo apt install unixodbc` |

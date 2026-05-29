@@ -72,7 +72,7 @@ class TestInfoCommand:
         assert result.exit_code == 1
 
     def test_info_calls_reader(self, runner: CliRunner, tmp_path: Path, mocker) -> None:
-        arquivo = tmp_path / "SX3010.dtc"
+        arquivo = tmp_path / "SAMPLE01.dtc"
         arquivo.write_bytes(b"\x00" * 16)
         spy = mocker.patch("dtcat.cli.read_info")
         result = runner.invoke(app, ["info", str(arquivo), "--sample", "3"])
@@ -83,7 +83,7 @@ class TestInfoCommand:
 
 class TestExportCommand:
     def test_export_default_format_is_csv(self, runner: CliRunner, tmp_path: Path, mocker) -> None:
-        arquivo = tmp_path / "SX3.dtc"
+        arquivo = tmp_path / "SAMPLE.dtc"
         arquivo.write_bytes(b"\x00")
         spy = mocker.patch("dtcat.cli.export_file")
         result = runner.invoke(app, ["export", str(arquivo)])
@@ -91,7 +91,7 @@ class TestExportCommand:
         assert spy.call_args.kwargs["fmt"] == ExportFormat.csv
 
     def test_export_explicit_format(self, runner: CliRunner, tmp_path: Path, mocker) -> None:
-        arquivo = tmp_path / "SX3.dtc"
+        arquivo = tmp_path / "SAMPLE.dtc"
         arquivo.write_bytes(b"\x00")
         spy = mocker.patch("dtcat.cli.export_file")
         result = runner.invoke(app, ["export", str(arquivo), "-f", "json"])
@@ -99,13 +99,13 @@ class TestExportCommand:
         assert spy.call_args.kwargs["fmt"] == ExportFormat.json
 
     def test_export_invalid_format_rejected(self, runner: CliRunner, tmp_path: Path) -> None:
-        arquivo = tmp_path / "SX3.dtc"
+        arquivo = tmp_path / "SAMPLE.dtc"
         arquivo.write_bytes(b"\x00")
         result = runner.invoke(app, ["export", str(arquivo), "-f", "yaml"])
         assert result.exit_code != 0
 
     def test_export_keep_deleted_flag(self, runner: CliRunner, tmp_path: Path, mocker) -> None:
-        arquivo = tmp_path / "SX3.dtc"
+        arquivo = tmp_path / "SAMPLE.dtc"
         arquivo.write_bytes(b"\x00")
         spy = mocker.patch("dtcat.cli.export_file")
         result = runner.invoke(app, ["export", str(arquivo), "--keep-deleted"])

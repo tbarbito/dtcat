@@ -30,14 +30,14 @@ class TestConnectionString:
 
 class TestRegisterDtcAsTable:
     def test_returns_uppercased_stem(self, tmp_path: Path) -> None:
-        arquivo = tmp_path / "sx3010.dtc"
+        arquivo = tmp_path / "sample01.dtc"
         arquivo.write_bytes(b"\x00")
-        assert reader._register_dtc_as_table(arquivo) == "SX3010"
+        assert reader._register_dtc_as_table(arquivo) == "SAMPLE01"
 
     def test_already_uppercase_filename(self, tmp_path: Path) -> None:
-        arquivo = tmp_path / "SC5010.DTC"
+        arquivo = tmp_path / "SAMPLE02.DTC"
         arquivo.write_bytes(b"\x00")
-        assert reader._register_dtc_as_table(arquivo) == "SC5010"
+        assert reader._register_dtc_as_table(arquivo) == "SAMPLE02"
 
 
 class TestReadInfo:
@@ -50,34 +50,34 @@ class TestReadInfo:
     def test_calls_odbc_and_renders(self, tmp_path: Path, mocker) -> None:
         from rich.console import Console
 
-        arquivo = tmp_path / "SX3010.dtc"
+        arquivo = tmp_path / "SAMPLE01.dtc"
         arquivo.write_bytes(b"\x00")
 
         fake_columns = [
-            mocker.Mock(column_name="X3_CAMPO", type_name="CHAR", column_size=10, nullable=0),
-            mocker.Mock(column_name="X3_TITULO", type_name="CHAR", column_size=30, nullable=1),
+            mocker.Mock(column_name="FIELD_CODE", type_name="CHAR", column_size=10, nullable=0),
+            mocker.Mock(column_name="FIELD_LABEL", type_name="CHAR", column_size=30, nullable=1),
         ]
         cursor = mocker.MagicMock()
         cursor.columns.return_value = iter(fake_columns)
         cursor.fetchone.return_value = (42,)
-        cursor.description = [("X3_CAMPO",), ("X3_TITULO",)]
-        cursor.fetchmany.return_value = [("A1_COD", b"Cod")]
+        cursor.description = [("FIELD_CODE",), ("FIELD_LABEL",)]
+        cursor.fetchmany.return_value = [("CUST001", b"Cod")]
         conn = mocker.MagicMock()
         conn.cursor.return_value = cursor
         mocker.patch("dtcat.reader._connect", mocker.MagicMock(return_value=_ctx(conn)))
 
         info = reader.read_info(arquivo, sample=2, console=Console(record=True))
 
-        assert info.table == "SX3010"
+        assert info.table == "SAMPLE01"
         assert info.row_count == 42
         assert len(info.columns) == 2
-        assert info.columns[0].name == "X3_CAMPO"
+        assert info.columns[0].name == "FIELD_CODE"
         assert info.columns[1].nullable is True
 
 
 class TestReadAll:
     def test_filters_deleted_by_default(self, tmp_path: Path, mocker) -> None:
-        arquivo = tmp_path / "SX3.dtc"
+        arquivo = tmp_path / "SAMPLE.dtc"
         arquivo.write_bytes(b"\x00")
         cursor = mocker.MagicMock()
         cursor.description = [("A",), ("D_E_L_E_T_",)]
@@ -94,7 +94,7 @@ class TestReadAll:
         assert "D_E_L_E_T_" in executed
 
     def test_keep_deleted_omits_filter(self, tmp_path: Path, mocker) -> None:
-        arquivo = tmp_path / "SX3.dtc"
+        arquivo = tmp_path / "SAMPLE.dtc"
         arquivo.write_bytes(b"\x00")
         cursor = mocker.MagicMock()
         cursor.description = [("A",)]

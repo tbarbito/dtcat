@@ -30,7 +30,7 @@ def sample_dtc(faircom_required: None) -> Path:
     if fixture is None:
         pytest.skip(
             f"Sem fixture .dtc em {FIXTURE_DIR}. "
-            "Adicione um arquivo (ex: SX3010.dtc) pra rodar e2e."
+            "Adicione um arquivo (ex: SAMPLE01.dtc) pra rodar e2e."
         )
     return fixture
 

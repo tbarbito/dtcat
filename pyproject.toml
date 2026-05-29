@@ -1,12 +1,12 @@
 [project]
 name = "dtcat"
 version = "0.1.0"
-description = "Leitor e exporter de arquivos .dtc (FairCom c-tree ISAM) — standalone, sem Protheus"
+description = "Standalone reader/exporter for c-tree ISAM data files (.dtc). CSV / JSON / XLSX export, cross-platform CLI."
 readme = "README.md"
 license = "MIT"
 authors = [{ name = "Tiago Barbieri", email = "tiagohbarbieri@gmail.com" }]
 requires-python = ">=3.11"
-keywords = ["c-tree", "ctree", "faircom", "isam", "dtc", "protheus", "advpl", "totvs"]
+keywords = ["c-tree", "ctree", "faircom", "isam", "dtc", "etl", "data-export", "odbc"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "License :: OSI Approved :: MIT License",

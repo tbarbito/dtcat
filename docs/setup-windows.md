@@ -1,52 +1,64 @@
-# Setup Windows (10/11)
+# Setup on Windows (10 / 11)
 
-Guia passo-a-passo para deixar o `dtcat` pronto pra rodar em Windows.
+Step-by-step guide to get **dtcat** working on Windows.
 
-## 1. Python
+## 1. Python and uv
 
-Instalar Python 3.11+ do https://python.org/downloads (marcar "Add to PATH").
+Install Python 3.11+ from https://python.org/downloads (check "Add to PATH" during install).
 
-Instalar uv:
+Install uv:
+
 ```powershell
 powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
 ```
 
 ## 2. FairCom DB Developer Edition
 
-1. Cadastrar em https://www.faircom.com/download-ctreeace
-2. Receber link por email → baixar build **Windows x64** (`.msi` ou `.zip`)
-3. Instalar pra `C:\FairCom\` (padrão do instalador)
-4. Definir variável de ambiente:
-   - Painel de Controle → Sistema → Variáveis de Ambiente
-   - Nova variável de usuário: `FAIRCOM_HOME` = `C:\FairCom\V13.0.0` (ou versão instalada)
+dtcat **does not bundle** FairCom binaries. Download the Developer Edition directly:
 
-## 3. Configurar o c-tree Server
+- **Sign-up form:** https://www.faircom.com/download-ctreeace
+- **All FairCom downloads:** https://www.faircom.com/products/downloads
 
-Editar `%FAIRCOM_HOME%\config\ctsrvr.cfg`:
+Fill out the form (name, email, company, country) → receive an email → download the **Windows x64** build (`.msi` or `.zip`).
+
+Or use the assisted installer:
+
+```powershell
+.\scripts\install-faircom.ps1
+```
+
+### Manual install
+
+1. Run the `.msi`, accept defaults (typical path: `C:\FairCom\V<version>`)
+2. Set environment variable:
+   - **Settings → System → About → Advanced system settings → Environment Variables**
+   - New user variable: `FAIRCOM_HOME` = `C:\FairCom\V13.0.0` (adjust to your version)
+
+## 3. Configure the c-tree server
+
+Edit `%FAIRCOM_HOME%\config\ctsrvr.cfg`:
 
 ```ini
 SERVER_NAME       DTCAT
-LOCAL_DIRECTORY   C:\Users\SEU_USER\.dtcat\inbox\
+LOCAL_DIRECTORY   C:\Users\YOUR_USER\.dtcat\inbox\
 COMM_PROTOCOL     F_TCPIP
 SQL_PORT          6597
 ```
 
-Criar a pasta inbox no PowerShell:
+Create the inbox folder (PowerShell):
 
 ```powershell
 mkdir $env:USERPROFILE\.dtcat\inbox
 ```
 
-## 4. Driver ODBC FairCom
+## 4. ODBC driver
 
-O instalador `.msi` já registra o driver no Windows ODBC Data Source Administrator.
+The `.msi` already registers the driver. Create a DSN:
 
-Criar DSN:
-
-1. Abrir **ODBC Data Sources (64-bit)** (busca no menu Iniciar)
-2. Aba **System DSN** → **Add**
-3. Selecionar **c-treeACE ODBC Driver** → Finish
-4. Preencher:
+1. Open **ODBC Data Sources (64-bit)** from the Start menu
+2. **System DSN** tab → **Add**
+3. Choose **c-tree ODBC Driver** → Finish
+4. Fill in:
    - Data Source Name: `dtcat`
    - Host: `localhost`
    - Database: `ctreeMainDB`
@@ -55,44 +67,44 @@ Criar DSN:
    - Password: `ADMIN`
 5. OK
 
-## 5. Instalar dtcat
+## 5. Install dtcat
 
 ```powershell
 uv tool install dtcat
 ```
 
-## 6. Validar
+## 6. Validate
 
 ```powershell
 dtcat doctor
 ```
 
-Deve retornar **OK** em todos os checks.
+All checks should report **OK**.
 
-## 7. Uso típico
+## 7. Typical usage
 
 ```powershell
-# Copiar o .dtc na pasta inbox
-Copy-Item $env:USERPROFILE\Downloads\SX3010.dtc $env:USERPROFILE\.dtcat\inbox\
+# Drop a .dtc file into the inbox
+Copy-Item $env:USERPROFILE\Downloads\data.dtc $env:USERPROFILE\.dtcat\inbox\
 
-# Subir o server
+# Start the server
 dtcat server start
 
-# Inspecionar
-dtcat info $env:USERPROFILE\.dtcat\inbox\SX3010.dtc
+# Inspect
+dtcat info $env:USERPROFILE\.dtcat\inbox\data.dtc
 
-# Exportar
-dtcat export $env:USERPROFILE\.dtcat\inbox\SX3010.dtc -f xlsx -o sx3.xlsx
+# Export
+dtcat export $env:USERPROFILE\.dtcat\inbox\data.dtc -f xlsx -o data.xlsx
 
-# Derrubar o server
+# Stop the server
 dtcat server stop
 ```
 
 ## Troubleshooting
 
-| Erro | Causa | Solução |
+| Error | Cause | Fix |
 |---|---|---|
-| `IM002 Data source name not found` | DSN ausente | Refazer passo 4 — usar versão 64-bit do ODBC Administrator |
-| `08001 Server not found` | Server não rodando | `dtcat server start` |
-| `Architecture mismatch` | DSN criado no ODBC 32-bit | Usar **ODBC Data Sources (64-bit)** explicitamente |
-| `Access denied` ao iniciar server | Permissão na pasta inbox | Rodar PowerShell como Admin ou ajustar ACL |
+| `IM002 Data source name not found` | DSN missing | Redo step 4 — use the 64-bit ODBC Administrator explicitly |
+| `08001 Server not found` | Server not running | `dtcat server start` |
+| `Architecture mismatch` | DSN created in 32-bit ODBC | Use **ODBC Data Sources (64-bit)** explicitly |
+| `Access denied` starting server | Permission on inbox folder | Run PowerShell as Administrator or adjust ACLs |

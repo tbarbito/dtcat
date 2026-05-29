@@ -41,12 +41,12 @@ def isolated_pid_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 @pytest.fixture
 def sample_rows() -> tuple[list[str], list[tuple]]:
-    """Dataset sintético no formato (columns, rows) — emula retorno do pyodbc."""
-    columns = ["X3_CAMPO", "X3_TITULO", "X3_TIPO", "X3_TAMANHO", "D_E_L_E_T_"]
+    """Synthetic (columns, rows) dataset emulating a pyodbc cursor result."""
+    columns = ["FIELD_CODE", "FIELD_LABEL", "FIELD_TYPE", "FIELD_SIZE", "D_E_L_E_T_"]
     rows = [
-        ("A1_COD     ", b"C\xf3digo", "C", 6, " "),
-        ("A1_NOME    ", b"Nome    ", "C", 30, " "),
-        ("A1_OLDREG  ", b"Antigo  ", "C", 10, "*"),
+        ("CUST_ID    ", b"C\xf3digo", "C", 6, " "),
+        ("CUST_NAME  ", b"Nome    ", "C", 30, " "),
+        ("OLD_RECORD ", b"Antigo  ", "C", 10, "*"),
     ]
     return columns, rows
 

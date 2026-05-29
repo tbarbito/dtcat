@@ -34,15 +34,15 @@ class TestToDataFrame:
         columns, rows = sample_rows
         df = exporter._to_dataframe(columns, rows)
         assert df.shape == (3, 5)
-        assert df.loc[0, "X3_TITULO"] == "Código"
-        assert df.loc[1, "X3_TITULO"] == "Nome"
+        assert df.loc[0, "FIELD_LABEL"] == "Código"
+        assert df.loc[1, "FIELD_LABEL"] == "Nome"
 
     def test_strips_trailing_spaces_from_strings(
         self, sample_rows: tuple[list[str], list[tuple]]
     ) -> None:
         columns, rows = sample_rows
         df = exporter._to_dataframe(columns, rows)
-        assert df.loc[0, "X3_CAMPO"] == "A1_COD"
+        assert df.loc[0, "FIELD_CODE"] == "CUST_ID"
 
     def test_handles_empty_rows(self) -> None:
         df = exporter._to_dataframe(["A", "B"], [])
@@ -56,7 +56,7 @@ class TestExportFile:
         return mocker.patch("dtcat.exporter.read_all", return_value=sample_rows)
 
     def test_export_csv(self, mocked_reader, tmp_path: Path) -> None:
-        arquivo = tmp_path / "SX3.dtc"
+        arquivo = tmp_path / "SAMPLE.dtc"
         arquivo.write_bytes(b"\x00")
         destino = tmp_path / "saida.csv"
 
@@ -65,11 +65,11 @@ class TestExportFile:
         assert result == destino
         assert destino.exists()
         content = destino.read_text(encoding="utf-8-sig")
-        assert "X3_CAMPO" in content
+        assert "FIELD_CODE" in content
         assert "Código" in content
 
     def test_export_json(self, mocked_reader, tmp_path: Path) -> None:
-        arquivo = tmp_path / "SX3.dtc"
+        arquivo = tmp_path / "SAMPLE.dtc"
         arquivo.write_bytes(b"\x00")
         destino = tmp_path / "saida.json"
 
@@ -79,11 +79,11 @@ class TestExportFile:
         data = json.loads(destino.read_text(encoding="utf-8"))
         assert isinstance(data, list)
         assert len(data) == 3
-        assert data[0]["X3_TITULO"] == "Código"
+        assert data[0]["FIELD_LABEL"] == "Código"
 
     def test_export_xlsx(self, mocked_reader, tmp_path: Path) -> None:
         pytest.importorskip("openpyxl")
-        arquivo = tmp_path / "SX3.dtc"
+        arquivo = tmp_path / "SAMPLE.dtc"
         arquivo.write_bytes(b"\x00")
         destino = tmp_path / "saida.xlsx"
 
@@ -93,7 +93,7 @@ class TestExportFile:
         assert destino.stat().st_size > 0
 
     def test_default_output_uses_source_stem(self, mocked_reader, tmp_path: Path) -> None:
-        arquivo = tmp_path / "SX3.dtc"
+        arquivo = tmp_path / "SAMPLE.dtc"
         arquivo.write_bytes(b"\x00")
 
         result = exporter.export_file(arquivo, ExportFormat.csv, None)
@@ -110,7 +110,7 @@ class TestExportFile:
         self, mocker, tmp_path: Path, sample_rows: tuple[list[str], list[tuple]]
     ) -> None:
         spy = mocker.patch("dtcat.exporter.read_all", return_value=sample_rows)
-        arquivo = tmp_path / "SX3.dtc"
+        arquivo = tmp_path / "SAMPLE.dtc"
         arquivo.write_bytes(b"\x00")
 
         exporter.export_file(arquivo, ExportFormat.csv, tmp_path / "o.csv", keep_deleted=True)
