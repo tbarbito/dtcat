@@ -1,93 +1,93 @@
 # dtcat
 
-Standalone reader and exporter for **c-tree ISAM** data files (`.dtc` and similar extensions). Inspect schema, browse records, export to CSV / JSON / XLSX — without depending on any specific application that produced the files.
+Leitor e exportador standalone para arquivos de dados **c-tree ISAM** (`.dtc` e extensões similares). Inspecione o schema, navegue pelos registros, exporte para CSV / JSON / XLSX — sem depender de nenhuma aplicação específica que tenha gerado os arquivos.
 
-> **Status:** Alpha. Cross-platform CLI (Linux, Windows, macOS). Requires a separate, free install of FairCom DB Developer Edition (see below).
+> **Status:** Alpha. CLI multiplataforma (Linux, Windows, macOS). Requer uma instalação separada e gratuita do FairCom DB Developer Edition (veja abaixo).
 
-## What dtcat does
+## O que o dtcat faz
 
-- **Inspect**: schema, row count, sample of records
-- **Export**: CSV, JSON, XLSX (with proper encoding handling)
-- **Batch**: process whole folders of `.dtc` files
-- **Standalone**: no application server, no proprietary client, just the data files
+- **Inspeciona**: schema, contagem de registros, amostra de registros
+- **Exporta**: CSV, JSON, XLSX (com tratamento correto de encoding)
+- **Lote (batch)**: processa pastas inteiras de arquivos `.dtc`
+- **Standalone**: sem application server, sem cliente proprietário, apenas os arquivos de dados
 
-## Why a separate FairCom install?
+## Por que uma instalação separada do FairCom?
 
-The c-tree ISAM file format is proprietary to **FairCom Corporation** and there is no mature open-source parser. dtcat is a thin Python layer that uses FairCom's ODBC driver to access the files — same model as `psycopg2` requiring `libpq`.
+O formato de arquivo c-tree ISAM é proprietário da **FairCom Corporation** e não existe um parser open-source maduro. O dtcat é uma camada Python fina que usa o driver ODBC da FairCom para acessar os arquivos — mesmo modelo do `psycopg2` que exige o `libpq`.
 
-dtcat is MIT-licensed and **does not redistribute any FairCom binaries**. You install FairCom DB Developer Edition (free for development) directly from FairCom, once per machine.
+O dtcat é licenciado sob MIT e **não redistribui nenhum binário da FairCom**. Você instala o FairCom DB Developer Edition (gratuito para desenvolvimento) diretamente da FairCom, uma vez por máquina.
 
-## Get FairCom DB Developer Edition (free)
+## Obtenha o FairCom DB Developer Edition (gratuito)
 
-Cadastro/Sign-up (form com nome, email, empresa, país):
+Cadastro (formulário com nome, email, empresa, país):
 
-- **Sign-up form:** https://www.faircom.com/download-ctreeace
-- **All downloads:** https://www.faircom.com/products/downloads
-- **Official documentation:** https://docs.faircom.com/
+- **Formulário de cadastro:** https://www.faircom.com/download-ctreeace
+- **Todos os downloads:** https://www.faircom.com/products/downloads
+- **Documentação oficial:** https://docs.faircom.com/
 
-After filling out the form, you receive an email with a download link. Pick the build for your OS:
+Após preencher o formulário, você recebe um email com o link de download. Escolha o build do seu SO:
 
-| OS | Build to download |
+| SO | Build para baixar |
 |---|---|
 | Linux | `FairCom DB — Linux x86_64` (`.tar.gz`) |
-| Windows | `FairCom DB — Windows x64` (`.msi` or `.zip`) |
+| Windows | `FairCom DB — Windows x64` (`.msi` ou `.zip`) |
 | macOS (Intel) | `FairCom DB — macOS x86_64` (`.dmg`) |
-| macOS (Apple Silicon) | No native build; use Intel build via Rosetta 2 |
+| macOS (Apple Silicon) | Sem build nativo; use o build Intel via Rosetta 2 |
 
-> **Note:** FairCom's Developer Edition has its own license and usage limits (typically: development use only, capped concurrent connections / records). dtcat does not bundle or modify it; you accept FairCom's terms directly with them.
+> **Nota:** O Developer Edition da FairCom tem sua própria licença e limites de uso (tipicamente: uso apenas para desenvolvimento, conexões / registros concorrentes limitados). O dtcat não empacota nem modifica esse software; você aceita os termos da FairCom diretamente com eles.
 
-Detailed step-by-step setup guides:
+Guias detalhados de configuração passo a passo:
 - Linux: [docs/setup-linux.md](docs/setup-linux.md)
 - Windows: [docs/setup-windows.md](docs/setup-windows.md)
 - macOS: [docs/setup-macos.md](docs/setup-macos.md)
 
-## Install dtcat
+## Instale o dtcat
 
 ```bash
 uv tool install dtcat
-# or
+# ou
 pipx install dtcat
 ```
 
-Validate everything is ready:
+Valide que está tudo pronto:
 
 ```bash
 dtcat doctor
 ```
 
-All checks should be green. If something fails, the output explains how to fix.
+Todas as verificações devem ficar verdes. Se algo falhar, a saída explica como corrigir.
 
-## Usage
+## Uso
 
-### Inspect a file
+### Inspecionar um arquivo
 
 ```bash
 dtcat info data.dtc
 ```
 
-Prints schema (fields, types, sizes), total record count, and a sample.
+Imprime o schema (campos, tipos, tamanhos), a contagem total de registros e uma amostra.
 
-### Export
+### Exportar
 
 ```bash
-dtcat export data.dtc                  # default: CSV
+dtcat export data.dtc                  # padrão: CSV
 dtcat export data.dtc -f json
 dtcat export data.dtc -f xlsx -o out/data.xlsx
 ```
 
-By default dtcat filters out records flagged as deleted (column `D_E_L_E_T_ = '*'`, a common convention in c-tree ISAM datasets). Use `--keep-deleted` to include them.
+Por padrão, o dtcat filtra os registros marcados como excluídos (coluna `D_E_L_E_T_ = '*'`, uma convenção comum em datasets c-tree ISAM). Use `--keep-deleted` para incluí-los.
 
-### Batch
+### Lote (batch)
 
 ```bash
 dtcat batch ~/inbox/ -f csv -o ~/out/
 ```
 
-Processes every `.dtc` in the folder.
+Processa todos os arquivos `.dtc` da pasta.
 
-### Local c-tree server (managed by dtcat)
+### Servidor c-tree local (gerenciado pelo dtcat)
 
-dtcat talks to a local c-tree server pointing at an inbox folder. You can manage it manually:
+O dtcat conversa com um servidor c-tree local apontando para uma pasta inbox. Você pode gerenciá-lo manualmente:
 
 ```bash
 dtcat server start
@@ -95,33 +95,33 @@ dtcat server status
 dtcat server stop
 ```
 
-## Environment variables
+## Variáveis de ambiente
 
-| Variable | Default | Description |
+| Variável | Padrão | Descrição |
 |---|---|---|
-| `FAIRCOM_HOME` | autodetect | FairCom installation directory |
-| `DTCAT_DSN` | `dtcat` | ODBC DSN name |
-| `DTCAT_USER` | `admin` | c-tree user |
-| `DTCAT_PASSWORD` | `ADMIN` | c-tree password |
+| `FAIRCOM_HOME` | autodetect | Diretório de instalação do FairCom |
+| `DTCAT_DSN` | `dtcat` | Nome do DSN ODBC |
+| `DTCAT_USER` | `admin` | Usuário c-tree |
+| `DTCAT_PASSWORD` | `ADMIN` | Senha c-tree |
 
 ## Encoding
 
-c-tree ISAM datasets commonly use **cp1252** in text fields. dtcat decodes to UTF-8 automatically on export.
+Datasets c-tree ISAM costumam usar **cp1252** em campos de texto. O dtcat decodifica para UTF-8 automaticamente na exportação.
 
-## Known limitations
+## Limitações conhecidas
 
-- Reads self-contained `.dtc` files. Files split across multiple physical artifacts (with separate index/key files in custom layouts) may need manual registration.
-- Very old c-tree versions (V8 / V9) may not be readable by current FairCom DB releases (V13+). `dtcat doctor` reports the detected runtime version.
-- macOS Apple Silicon: no native FairCom driver — run under Rosetta 2 or a Linux VM.
+- Lê arquivos `.dtc` autocontidos. Arquivos divididos em múltiplos artefatos físicos (com arquivos de índice/chave separados em layouts customizados) podem precisar de registro manual.
+- Versões muito antigas do c-tree (V8 / V9) podem não ser legíveis pelas versões atuais do FairCom DB (V13+). O `dtcat doctor` reporta a versão de runtime detectada.
+- macOS Apple Silicon: sem driver FairCom nativo — rode via Rosetta 2 ou uma VM Linux.
 
-## Why not a pure-Python parser?
+## Por que não um parser em Python puro?
 
-The c-tree ISAM format is proprietary and closed. Reverse-engineering from scratch is a multi-month project with high risk across format variants. dtcat takes the pragmatic path: pure Python on top, FairCom's native driver underneath.
+O formato c-tree ISAM é proprietário e fechado. Fazer engenharia reversa do zero é um projeto de vários meses, com alto risco entre as variações de formato. O dtcat segue o caminho pragmático: Python puro por cima, driver nativo da FairCom por baixo.
 
-## License
+## Licença
 
-**dtcat** is licensed under the [MIT License](LICENSE).
+O **dtcat** é licenciado sob a [Licença MIT](LICENSE).
 
-The MIT license applies only to dtcat's own source code. See [NOTICE](NOTICE) for important information about third-party software and trademarks.
+A licença MIT se aplica apenas ao código-fonte do próprio dtcat. Veja o [NOTICE](NOTICE) para informações importantes sobre software de terceiros e marcas registradas.
 
-dtcat is an independent open-source project and is not affiliated with FairCom Corporation or any other company.
+O dtcat é um projeto open-source independente e não possui afiliação com a FairCom Corporation ou qualquer outra empresa.
