@@ -1,6 +1,13 @@
-# Configuração no Linux (Ubuntu 22.04+ / 24.04)
+# FairCom DB no Linux — fallback c-tree (opcional)
 
-Guia passo a passo para deixar o **dtcat** funcionando no Linux.
+> ⚠️ **Você provavelmente NÃO precisa disto.** Para ler/exportar `.dtc` do
+> Protheus (fixed-length), o dtcat funciona em Python puro, sem FairCom — basta
+> `pip install` e usar. Veja o [README](../README.md).
+>
+> Este guia só é necessário para o **fallback c-tree opcional**, usado em
+> arquivos `.dtc` que não são fixed-length do Protheus (variáveis/indexados).
+
+Guia passo a passo para instalar e configurar o **FairCom DB** no Linux.
 
 > O dtcat usa o **driver Python nativo** que acompanha o FairCom DB. **Não é
 > necessário unixODBC nem configurar DSN.**
