@@ -22,6 +22,7 @@ import os
 import platform
 import re
 import shutil
+import struct
 import subprocess
 from dataclasses import dataclass
 from functools import lru_cache
@@ -195,11 +196,23 @@ _RECLEN_RE = re.compile(r"Data record length\s*=\s*(\d+)")
 
 
 def extract_layout(arquivo: Path, home: Path | None = None) -> Layout | None:
-    """Extrai o layout (record length + DODA) de um arquivo ISAM via ctinfo.
+    """Extrai o layout (record length + DODA) de um arquivo ISAM.
 
-    Roda ``ctinfo.standalone`` (não precisa do servidor). Devolve ``Layout`` ou
-    ``None`` se não conseguir extrair (arquivo não é fixed-length, sem DODA, ou
-    ctinfo indisponível).
+    Tenta primeiro o parser DODA **nativo** (puro Python, dispensa o FairCom);
+    é o caminho principal para arquivos com assinatura Protheus. Se ele não se
+    aplicar, cai no ``ctinfo`` (que exige o FairCom instalado).
+    """
+    native = parse_doda_native(arquivo)
+    if native is not None:
+        return native
+    return _extract_layout_ctinfo(arquivo, home)
+
+
+def _extract_layout_ctinfo(arquivo: Path, home: Path | None = None) -> Layout | None:
+    """Extrai o layout via ``ctinfo.standalone`` (fallback; exige FairCom).
+
+    Devolve ``Layout`` ou ``None`` se não conseguir extrair (arquivo não é
+    fixed-length, sem DODA, ou ctinfo indisponível).
     """
     home = home or find_faircom_home()
     if home is None:
@@ -228,6 +241,134 @@ def extract_layout(arquivo: Path, home: Path | None = None) -> Layout | None:
     if not fields:
         return None
     return Layout(record_length=record_length, is_fixed=True, fields=fields)
+
+
+# --- parser DODA nativo (puro Python, dispensa o FairCom na leitura) -----
+#
+# O recurso DODA fica dentro do próprio .dtc. Layout do bloco (validado contra
+# arquivos reais do Protheus + ctinfo):
+#   [uint32 N][uint32 N]                 cabeçalho: contagem de campos, duplicada
+#   N x (uint16 tamanho, uint16 tipo)    array de campos, na ordem do registro
+#   N x (uint8 prefixo + nome + 0x00)    pool de nomes (cp1252, null-terminated)
+# Os offsets de cada campo NÃO são gravados: o c-tree os calcula alinhando cada
+# campo conforme seu tipo. Por isso reconstruímos os offsets aqui.
+
+# Código do tipo c-tree (ctport.h) = (índice_base << 3) + classe_de_tamanho.
+# Mapeamos para os mesmos nomes que o ctinfo imprime (sem o prefixo "CT_").
+_CTYPE_BY_CODE = {
+    8: "BOOL", 16: "CHAR", 24: "CHARU",
+    33: "INT2", 41: "INT2U", 51: "INT4", 59: "INT4U",
+    67: "MONEY", 75: "DATE", 83: "TIME", 91: "SFLOAT", 103: "DFLOAT",
+    119: "EFLOAT", 124: "TIMES", 128: "ARRAY", 143: "CURRENCY",
+    144: "FSTRING", 146: "STRING", 152: "FPSTRING", 154: "PSTRING",
+    160: "F2STRING", 162: "2STRING", 168: "F4STRING", 170: "4STRING",
+    177: "FUNICODE", 185: "UNICODE", 193: "F2UNICODE", 201: "2UNICODE",
+    227: "INT8", 235: "INT8U",
+}  # fmt: skip
+
+# Famílias (código >> 3) de texto/array → alinhadas a 1 byte. Para os tipos
+# escalares (inteiros, datas, floats), os 3 bits baixos do código codificam
+# (tamanho - 1), então o alinhamento natural é (code & 7) + 1.
+_CHAR_BASES = frozenset({2, 3, 16, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27})
+
+# Nomes possíveis do campo de soft-delete do Protheus (sempre no offset 0).
+_PROTHEUS_DELETE = (b"D_E_L_E_T_E_D", b"D_E_L_E_T_")
+
+
+def _ctype_name(code: int) -> str:
+    return _CTYPE_BY_CODE.get(code, f"CT{code}")
+
+
+def _field_align(code: int) -> int:
+    """Alinhamento natural do campo no registro, derivado do código c-tree."""
+    if (code >> 3) in _CHAR_BASES:
+        return 1
+    return (code & 7) + 1
+
+
+def _delete_name_anchors(data: bytes) -> list[int]:
+    """Offsets onde começa um nome de campo de soft-delete do Protheus.
+
+    Exige o terminador null logo após o nome (assinatura do pool de nomes), o
+    que evita casar com ocorrências do texto dentro dos dados.
+    """
+    anchors: list[int] = []
+    for name in _PROTHEUS_DELETE:
+        start = 0
+        while True:
+            i = data.find(name, start)
+            if i < 0:
+                break
+            end = i + len(name)
+            if end < len(data) and data[end] == 0:
+                anchors.append(i)
+            start = i + 1
+    return anchors
+
+
+def _parse_doda_from_anchor(data: bytes, anchor: int) -> Layout | None:
+    """Reconstrói o Layout assumindo que o pool de nomes começa em ``anchor``.
+
+    Caminha de trás pra frente: antes do pool vem o array de N*4 bytes; antes
+    dele, o cabeçalho com N duplicado. Devolve ``None`` se a estrutura não casar.
+    """
+    pool = anchor - 1  # byte de prefixo de tamanho do 1º nome
+    if pool < 8:
+        return None
+    n = None
+    for cand in range(1, 4097):
+        head = pool - 8 - cand * 4
+        if head < 0:
+            break
+        a, b = struct.unpack_from("<II", data, head)
+        if a == cand and b == cand:
+            n = cand
+            break
+    if n is None:
+        return None
+    arr = pool - n * 4
+    entries = [struct.unpack_from("<HH", data, arr + i * 4) for i in range(n)]
+    if any(ln == 0 for ln, _ in entries):
+        return None
+    names: list[str] = []
+    p = pool
+    for _ in range(n):
+        if p >= len(data):
+            return None
+        end = data.find(b"\x00", p + 1)
+        if end < 0:
+            return None
+        names.append(data[p + 1 : end].decode("cp1252", "replace"))
+        p = end + 1
+    fields: list[FieldDef] = []
+    cur = 0
+    for (ln, code), nm in zip(entries, names, strict=True):
+        align = _field_align(code)
+        if cur % align:
+            cur += align - (cur % align)
+        fields.append(FieldDef(name=nm, offset=cur, length=ln, ctype=_ctype_name(code)))
+        cur += ln
+    return Layout(record_length=cur, is_fixed=True, fields=fields)
+
+
+def parse_doda_native(arquivo: Path) -> Layout | None:
+    """Extrai o Layout lendo o DODA direto do .dtc, **sem o FairCom**.
+
+    Caminho zero-FairCom: localiza o recurso DODA pela âncora do campo de
+    soft-delete do Protheus, lê o array de (tamanho, tipo) e o pool de nomes, e
+    calcula os offsets pela regra de alinhamento do c-tree. Só devolve um Layout
+    com assinatura Protheus (fixed-length + delete D_E_L_E_T_* no offset 0);
+    para os demais devolve ``None`` (cai no ctinfo / c-tree).
+    """
+    try:
+        data = arquivo.read_bytes()
+    except OSError:
+        return None
+    for anchor in _delete_name_anchors(data):
+        layout = _parse_doda_from_anchor(data, anchor)
+        if layout is not None and layout.is_protheus:
+            return layout
+    return None
 
 
 def sql_dbs_dir(home: Path) -> Path:
