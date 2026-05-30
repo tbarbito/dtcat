@@ -20,7 +20,7 @@ INT2 = 33
 CHAR = 16
 
 
-def _build_doda(fields: list[tuple[str, int, int]]) -> bytes:
+def _build_doda(fields: list[tuple[str, int, int]], gap: int = 0) -> bytes:
     """Monta um bloco DODA: cabeçalho (N,N) + array (len,type) + pool de nomes.
 
     ``fields`` = lista de ``(nome, tamanho, codigo_de_tipo)`` na ordem do registro.
@@ -32,7 +32,9 @@ def _build_doda(fields: list[tuple[str, int, int]]) -> bytes:
     for name, _, _ in fields:
         nb = name.encode("cp1252")
         pool += bytes([len(nb) + 2]) + nb + b"\x00"
-    return header + arr + pool
+    # `gap`: bytes entre o array e o pool — algumas versões do APSDU não "colam"
+    # o pool no array (ex.: Protheus/Postgres). O locator deve tolerar isso.
+    return header + arr + b"\x00" * gap + pool
 
 
 def _write(tmp_path: Path, doda: bytes, prefix: bytes = b"\x00" * 32) -> Path:
@@ -61,6 +63,59 @@ class TestTypeHelpers:
         assert faircom._field_align(FSTRING) == 1  # família de texto
         assert faircom._field_align(CHAR) == 1
         assert faircom._field_align(146) == 1  # STRING (variável) também 1
+
+
+DFLOAT = 103  # CT_DFLOAT — campos numéricos do Protheus (double 8 bytes)
+
+
+class TestCrossVersionVariants:
+    """Layouts diferem entre versões/bancos do Protheus (Oracle, Postgres, ...).
+
+    O locator precisa achar o DODA mesmo quando o pool de nomes não "cola" no
+    array (gap), e tratar campos DFLOAT (numéricos).
+    """
+
+    def test_handles_gap_between_array_and_pool(self, tmp_path: Path) -> None:
+        # variante estilo APSDU/Postgres: há bytes entre o array e o pool
+        doda = _build_doda(
+            [
+                ("D_E_L_E_T_E_D", 1, FSTRING),
+                ("R_E_C_N_O", 4, INT4U),
+                ("E5_VALOR", 8, DFLOAT),
+            ],
+            gap=4,
+        )
+        layout = faircom.parse_doda_native(_write(tmp_path, doda))
+        assert layout is not None and layout.is_protheus
+        assert [f.name for f in layout.fields] == ["D_E_L_E_T_E_D", "R_E_C_N_O", "E5_VALOR"]
+        # offsets com alinhamento: delete@0, recno@4 (INT4U), valor@8 (DFLOAT align 8)
+        assert [f.offset for f in layout.fields] == [0, 4, 8]
+        assert layout.fields[2].ctype == "DFLOAT"
+        assert layout.record_length == 16
+
+    def test_dfloat_value_roundtrips(self, tmp_path: Path) -> None:
+        from dtcat import parser
+
+        doda = _build_doda(
+            [
+                ("D_E_L_E_T_E_D", 1, FSTRING),
+                ("R_E_C_N_O", 4, INT4U),
+                ("E5_VALOR", 8, DFLOAT),
+            ]
+        )
+        layout = faircom.parse_doda_native(_write(tmp_path, doda))
+        reclen = layout.record_length
+
+        def rec(valor: float) -> bytes:
+            b = bytearray(reclen)
+            b[0:1] = b" "
+            b[4:8] = struct.pack("<I", 1)
+            b[8:16] = struct.pack("<d", valor)
+            return bytes(b)
+
+        cols, rows = parser.read_fixed(b"\xff" * reclen + rec(1234.56), layout)
+        assert cols[2] == "E5_VALOR"
+        assert rows[0][2] == 1234.56
 
 
 class TestParseDodaNative:

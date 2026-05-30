@@ -5,6 +5,29 @@ Todas as mudanças relevantes deste projeto são documentadas aqui.
 O formato segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/)
 e o projeto adota [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
+## [0.5.0] - 2026-05-30
+
+Leitura **robusta entre versões do Protheus e bancos** (Oracle, Postgres, SQL
+Server). Validado com a mesma tabela (SX3) exportada dos três bancos, além de
+SE5 (Postgres) e SA1 (SQL Server). A variação de layout entre arquivos é por
+**versão do Protheus/tabela**, não pelo banco — e o parser se adapta a todas.
+
+### Added
+- Suporte a campos numéricos **DFLOAT** (double 8 bytes) e **SFLOAT** (float 4
+  bytes) — é como o Protheus grava campos do tipo `N` (ex.: `E5_VALOR`).
+- Suporte a campos **memo / string variável** (`4STRING` etc.), que ocupam 0
+  bytes no registro fixo (conteúdo fora dele).
+
+### Changed
+- **Localizador do DODA tolerante a variações de versão**: procura o cabeçalho
+  de contagem `(N, N)` e valida as entradas, aceitando o gap que algumas versões
+  deixam entre o array de campos e o pool de nomes.
+- **Enquadramento físico do registro deduzido pela sequência de `R_E_C_N_O`**: o
+  tamanho do registro no arquivo pode ser maior que a soma dos campos do DODA
+  (padding por registro, ex.: tabelas com memo) e o início dos dados pode não ser
+  múltiplo do registro — o parser deduz início e tamanho reais lendo a sequência
+  de R_E_C_N_O, em vez de assumir layout fixo.
+
 ## [0.4.0] - 2026-05-30
 
 Leitura **zero-FairCom**: o dtcat agora lê arquivos `.dtc` do Protheus sem

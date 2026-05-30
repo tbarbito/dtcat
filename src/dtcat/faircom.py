@@ -306,43 +306,97 @@ def _delete_name_anchors(data: bytes) -> list[int]:
     return anchors
 
 
+def _is_ident(raw: bytes) -> bool:
+    """Nome de campo do Protheus: letras, dígitos e ``_`` (ex.: D_E_L_E_T_E_D)."""
+    if not raw:
+        return False
+    return all(
+        c == 0x5F or 0x30 <= c <= 0x39 or 0x41 <= c <= 0x5A or 0x61 <= c <= 0x7A for c in raw
+    )
+
+
+def _parse_name_pool(data: bytes, pool: int) -> list[str]:
+    """Lê o pool de nomes a partir de ``pool`` (1 byte de prefixo + nome + NUL).
+
+    Tolerante a variações entre versões do APSDU: usa o terminador NUL como
+    fronteira e para quando o conteúdo deixa de ser um nome de campo válido
+    (pode passar um pouco do fim; a contagem real vem do cabeçalho do DODA).
+    """
+    names: list[str] = []
+    p = pool
+    while p < len(data) and len(names) < 8192:
+        end = data.find(b"\x00", p + 1)
+        if end < 0:
+            break
+        nm = data[p + 1 : end]
+        if not _is_ident(nm):
+            break
+        names.append(nm.decode("cp1252", "replace"))
+        p = end + 1
+    return names
+
+
+def _valid_entries(data: bytes, arr: int, n: int) -> list[tuple[int, int]] | None:
+    """Lê e valida ``n`` entradas (uint16 tamanho, uint16 tipo) do array do DODA."""
+    if arr < 0 or arr + n * 4 > len(data):
+        return None
+    ents = [struct.unpack_from("<HH", data, arr + i * 4) for i in range(n)]
+    for ln, code in ents:
+        base = code >> 3
+        # ln == 0 é válido: campos memo/variáveis (ex.: 4STRING) ocupam 0 bytes
+        # no registro fixo — o conteúdo fica fora dele.
+        if base == 0 or base > 40 or ln > 0xFFFF:  # tipo c-tree plausível
+            return None
+    # o 1º campo é o de soft-delete: texto/char curto
+    if ents[0][1] not in (16, 24, 144, 146, 152, 154):  # CHAR/CHARU/FSTRING/STRING/...
+        return None
+    return ents
+
+
+def _locate_array(data: bytes, pool: int, max_n: int) -> tuple[int, list[tuple[int, int]]] | None:
+    """Localiza o array de campos do DODA antes do pool de nomes.
+
+    Robusto a variações de versão: primeiro procura o cabeçalho de **contagem
+    duplicada** ``(N, N)`` (a contagem é autoritativa); se não houver, tenta o
+    array logo antes do pool, tolerando um pequeno gap.
+    """
+    # 1) cabeçalho de contagem duplicada (N, N) — vale entre versões testadas
+    lo = max(0, pool - max_n * 4 - 512)
+    for c in range(pool - 8, lo - 1, -1):
+        a, b = struct.unpack_from("<II", data, c)
+        if a == b and 2 <= a <= max_n:
+            ents = _valid_entries(data, c + 8, a)
+            if ents is not None and c + 8 + a * 4 <= pool:
+                return c + 8, ents
+    # 2) fallback: array imediatamente antes do pool (com gap pequeno)
+    for gap in range(33):
+        arr = pool - gap - max_n * 4
+        ents = _valid_entries(data, arr, max_n)
+        if ents is not None:
+            return arr, ents
+    return None
+
+
 def _parse_doda_from_anchor(data: bytes, anchor: int) -> Layout | None:
     """Reconstrói o Layout assumindo que o pool de nomes começa em ``anchor``.
 
-    Caminha de trás pra frente: antes do pool vem o array de N*4 bytes; antes
-    dele, o cabeçalho com N duplicado. Devolve ``None`` se a estrutura não casar.
+    Lê os nomes, localiza o array de (tamanho, tipo) de forma robusta a variações
+    de versão do APSDU e reconstrói os offsets pela regra de alinhamento do c-tree.
     """
     pool = anchor - 1  # byte de prefixo de tamanho do 1º nome
     if pool < 8:
         return None
-    n = None
-    for cand in range(1, 4097):
-        head = pool - 8 - cand * 4
-        if head < 0:
-            break
-        a, b = struct.unpack_from("<II", data, head)
-        if a == cand and b == cand:
-            n = cand
-            break
-    if n is None:
+    names = _parse_name_pool(data, pool)
+    if len(names) < 2:
         return None
-    arr = pool - n * 4
-    entries = [struct.unpack_from("<HH", data, arr + i * 4) for i in range(n)]
-    if any(ln == 0 for ln, _ in entries):
+    located = _locate_array(data, pool, len(names))
+    if located is None:
         return None
-    names: list[str] = []
-    p = pool
-    for _ in range(n):
-        if p >= len(data):
-            return None
-        end = data.find(b"\x00", p + 1)
-        if end < 0:
-            return None
-        names.append(data[p + 1 : end].decode("cp1252", "replace"))
-        p = end + 1
+    _arr, entries = located
+    n = len(entries)
     fields: list[FieldDef] = []
     cur = 0
-    for (ln, code), nm in zip(entries, names, strict=True):
+    for (ln, code), nm in zip(entries, names[:n], strict=True):
         align = _field_align(code)
         if cur % align:
             cur += align - (cur % align)

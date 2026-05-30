@@ -1,6 +1,6 @@
 [project]
 name = "dtcat"
-version = "0.4.0"
+version = "0.5.0"
 description = "Standalone reader/exporter for c-tree ISAM data files (.dtc). CSV / JSON / XLSX export, cross-platform CLI."
 readme = "README.md"
 license = "MIT"
