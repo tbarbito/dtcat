@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import contextlib
+import sys
 from pathlib import Path
 from typing import Annotated
 
@@ -13,6 +15,14 @@ from dtcat.doctor import run_doctor
 from dtcat.exporter import ExportFormat, export_file
 from dtcat.reader import read_info
 from dtcat.server import server_start, server_status, server_stop
+
+# Força saída UTF-8: consoles Windows legados usam cp1252/cp850 e quebrariam
+# (UnicodeEncodeError) nos glyphs do rich — ✓, →, ≥, ●, — usados na UI.
+for _stream in (sys.stdout, sys.stderr):
+    _reconfigure = getattr(_stream, "reconfigure", None)
+    if _reconfigure is not None:
+        with contextlib.suppress(OSError, ValueError):  # stream sem reconfigure
+            _reconfigure(encoding="utf-8")
 
 app = typer.Typer(
     name="dtcat",

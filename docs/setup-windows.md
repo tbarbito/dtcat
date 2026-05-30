@@ -1,6 +1,13 @@
-# Configuração no Windows (10 / 11)
+# FairCom DB no Windows — fallback c-tree (opcional)
 
-Guia passo a passo para deixar o **dtcat** funcionando no Windows.
+> ⚠️ **Você provavelmente NÃO precisa disto.** Para ler/exportar `.dtc` do
+> Protheus (fixed-length), o dtcat funciona em Python puro, sem FairCom — basta
+> `py -m pip install` e usar. Veja o [README](../README.md).
+>
+> Este guia só é necessário para o **fallback c-tree opcional**, usado em
+> arquivos `.dtc` que não são fixed-length do Protheus (variáveis/indexados).
+
+Guia passo a passo para instalar e configurar o **FairCom DB** no Windows.
 
 > O dtcat usa o **driver Python nativo** que acompanha o FairCom DB. **Não é
 > necessário configurar DSN ODBC.**
@@ -51,7 +58,7 @@ Ou use o instalador assistido:
 ## 3. Instale o dtcat
 
 ```powershell
-uv tool install dtcat
+uv tool install git+https://github.com/tbarbito/dtcat.git
 ```
 
 ## 4. Valide

@@ -30,3 +30,8 @@ out/
 *.json
 *.xlsx
 !tests/fixtures/*.dtc
+
+# Artefatos do servidor FairCom (não pertencem ao repo)
+*.FCS
+*.dbs
+server.log
