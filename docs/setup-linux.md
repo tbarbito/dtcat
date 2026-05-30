@@ -1,6 +1,13 @@
-# Configuração no Linux (Ubuntu 22.04+ / 24.04)
+# FairCom DB no Linux — fallback c-tree (opcional)
 
-Guia passo a passo para deixar o **dtcat** funcionando no Linux.
+> ⚠️ **Você provavelmente NÃO precisa disto.** Para ler/exportar `.dtc` do
+> Protheus (fixed-length), o dtcat funciona em Python puro, sem FairCom — basta
+> `pip install` e usar. Veja o [README](../README.md).
+>
+> Este guia só é necessário para o **fallback c-tree opcional**, usado em
+> arquivos `.dtc` que não são fixed-length do Protheus (variáveis/indexados).
+
+Guia passo a passo para instalar e configurar o **FairCom DB** no Linux.
 
 > O dtcat usa o **driver Python nativo** que acompanha o FairCom DB. **Não é
 > necessário unixODBC nem configurar DSN.**
@@ -60,7 +67,7 @@ source ~/.bashrc
 ## 3. Instale o dtcat
 
 ```bash
-uv tool install dtcat
+uv tool install git+https://github.com/tbarbito/dtcat.git
 ```
 
 ## 4. Valide
@@ -73,26 +80,26 @@ Todas as verificações devem reportar **OK** (Python, FairCom, lib nativa, driv
 
 ## 5. Uso típico
 
-```bash
-# 1. Inicie o servidor FairCom local (uma vez por sessão)
-dtcat server start
-dtcat server status
+> Para a maioria dos `.dtc` (fixed-length, ex.: exports tipo APSDU) **não é
+> preciso iniciar o servidor** — o dtcat lê direto pelo parser DODA. O
+> `dtcat server start` só é necessário no fallback c-tree (arquivos que tragam
+> o índice / não fixed-length).
 
-# 2. Inspecione um arquivo .dtc
+```bash
+# Inspecione um arquivo .dtc (não precisa do servidor)
 dtcat info ~/Downloads/clientes.dtc
 
-# 3. Exporte
+# Exporte
 dtcat export ~/Downloads/clientes.dtc -f csv -o ~/out/clientes.csv
 
-# 4. Lote: pasta inteira
+# Lote: pasta inteira
 dtcat batch ~/inbox/ -f csv -o ~/out/
 
-# 5. Pare o servidor quando terminar
+# (Fallback c-tree) só se algum arquivo precisar do servidor:
+dtcat server start
+# ... dtcat info/export ...
 dtcat server stop
 ```
-
-O `dtcat` registra cada `.dtc` no dicionário SQL (via `ctsqlimp`), lê e depois
-desvincula automaticamente — os dados originais não são alterados.
 
 ## Conexão (avançado)
 

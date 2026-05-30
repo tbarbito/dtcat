@@ -31,6 +31,8 @@ def fake_faircom_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     (tools / "ctsqlimp").chmod(0o755)
     (tools / "ctstop").write_text("#!/bin/sh\necho stub\n")
     (tools / "ctstop").chmod(0o755)
+    (tools / "ctinfo.standalone").write_text("#!/bin/sh\necho stub\n")
+    (tools / "ctinfo.standalone").chmod(0o755)
     (drv / "pyctree.py").write_text("# stub\n")
     (drv / "pyctsqlapi.py").write_text("# stub\n")
 
