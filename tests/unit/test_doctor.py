@@ -2,12 +2,22 @@
 
 from __future__ import annotations
 
+import platform
 from pathlib import Path
 
 import pytest
 from rich.console import Console
 
 from dtcat import doctor, faircom
+
+
+def _platform_bin(names_table: dict[str, tuple[str, ...]]) -> str:
+    """Primeiro nome de binário que a descoberta procura no SO atual.
+
+    No Windows os nomes têm sufixo ``.exe`` — os testes precisam criar o arquivo
+    com o nome certo para a função de descoberta achá-lo.
+    """
+    return names_table.get(platform.system(), names_table["_default"])[0]
 
 
 class TestFindFaircomHome:
@@ -100,7 +110,7 @@ class TestCheckServerBinary:
     def test_finds_faircom_binary(self, tmp_path: Path) -> None:
         srv = tmp_path / "server"
         srv.mkdir()
-        binary = srv / "faircom"
+        binary = srv / _platform_bin(faircom._SERVER_BINARIES)
         binary.write_text("#!/bin/sh\n")
         binary.chmod(0o755)
         ok, detail = doctor._check_server_binary(tmp_path)
@@ -121,8 +131,9 @@ class TestCheckCtsqlimp:
     def test_finds_ctsqlimp(self, tmp_path: Path) -> None:
         tools = tmp_path / "tools"
         tools.mkdir()
-        (tools / "ctsqlimp").write_text("#!/bin/sh\n")
-        (tools / "ctsqlimp").chmod(0o755)
+        binary = tools / _platform_bin(faircom._CTSQLIMP_NAMES)
+        binary.write_text("#!/bin/sh\n")
+        binary.chmod(0o755)
         ok, detail = doctor._check_ctsqlimp(tmp_path)
         assert ok is True
         assert "ctsqlimp" in detail
@@ -136,8 +147,9 @@ class TestCheckCtinfo:
     def test_finds_ctinfo_standalone(self, tmp_path: Path) -> None:
         tools = tmp_path / "tools"
         tools.mkdir()
-        (tools / "ctinfo.standalone").write_text("#!/bin/sh\n")
-        (tools / "ctinfo.standalone").chmod(0o755)
+        binary = tools / _platform_bin(faircom._CTINFO_NAMES)
+        binary.write_text("#!/bin/sh\n")
+        binary.chmod(0o755)
         ok, detail = doctor._check_ctinfo(tmp_path)
         assert ok is True
         assert "ctinfo" in detail
