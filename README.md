@@ -2,7 +2,7 @@
 
 Leitor e exportador standalone para arquivos de dados **c-tree ISAM** (`.dtc` e extensões similares). Inspecione o schema, navegue pelos registros, exporte para CSV / JSON / XLSX — sem depender de nenhuma aplicação específica que tenha gerado os arquivos.
 
-> **Status:** Alpha. CLI multiplataforma (Linux, Windows, macOS). Requer uma instalação separada e gratuita do FairCom DB Developer Edition (veja abaixo).
+> **Status:** Alpha. CLI multiplataforma (Linux, Windows, macOS). Para arquivos `.dtc` do Protheus (fixed-length), **não requer o FairCom** — o parser DODA nativo lê tudo em Python puro. O FairCom DB Developer Edition (gratuito) só é necessário para o fallback c-tree de arquivos não-Protheus (veja abaixo).
 
 ## O que o dtcat faz
 
@@ -11,13 +11,23 @@ Leitor e exportador standalone para arquivos de dados **c-tree ISAM** (`.dtc` e 
 - **Lote (batch)**: processa pastas inteiras de arquivos `.dtc`
 - **Standalone**: sem application server, sem cliente proprietário, apenas os arquivos de dados
 
-## Por que uma instalação separada do FairCom?
+## Preciso instalar o FairCom?
 
-O formato de arquivo c-tree ISAM é proprietário da **FairCom Corporation** e não existe um parser open-source maduro. O dtcat é uma camada Python fina sobre o **driver Python nativo** (`pyctree`, DB-API 2.0) que acompanha o FairCom DB — carregado em runtime de `$FAIRCOM_HOME`. Mesmo modelo do `psycopg2`, que precisa do `libpq` instalado.
+**Para `.dtc` do Protheus (fixed-length): não.** O dtcat reverte o bloco DODA
+direto do binário em Python puro e lê os registros sozinho — sem FairCom, sem
+servidor, sem índice. É o caminho principal e cobre os exports tipo APSDU.
 
-> Por usar o driver nativo, o dtcat **não exige unixODBC nem configuração de DSN**.
+**Para o fallback c-tree (arquivos não-Protheus, variáveis, ou que dependam do
+índice): sim.** Aí o dtcat usa o **driver Python nativo** (`pyctree`, DB-API 2.0)
+que acompanha o FairCom DB, carregado em runtime de `$FAIRCOM_HOME` (mesmo modelo
+do `psycopg2`, que precisa do `libpq`). Rode `dtcat doctor` para ver o que está
+disponível na sua máquina.
 
-O dtcat é licenciado sob MIT e **não redistribui nenhum binário da FairCom**. Você instala o FairCom DB Developer Edition (gratuito para desenvolvimento) diretamente da FairCom, uma vez por máquina.
+> Por usar o driver nativo, o fallback **não exige unixODBC nem configuração de DSN**.
+
+O dtcat é licenciado sob MIT e **não redistribui nenhum binário da FairCom**. O
+FairCom DB Developer Edition (gratuito para desenvolvimento) é instalado por você
+diretamente da FairCom, uma vez por máquina — e só quando precisar do fallback.
 
 ## Como funciona
 
@@ -27,7 +37,7 @@ O dtcat tem dois caminhos de leitura e escolhe o melhor para cada arquivo:
 
 Arquivos exportados de aplicativos c-tree (ex.: rotinas tipo APSDU) costumam vir como **dados puros, fixed-length, sem o índice** — o índice referenciado internamente (IFIL) aponta para um caminho do servidor de origem, que não existe na sua máquina. Por isso o caminho c-tree puro (abrir a tabela) falha (`FOPN_ERR`).
 
-O dtcat resolve lendo **direto do layout físico**: a utilidade `ctinfo` extrai o DODA (offsets, tipos e tamanhos dos campos) e o dtcat parseia os registros fixed-length, decodificando cp1252. **Não precisa do servidor SQL nem do índice** — basta `dtcat info` / `export`.
+O dtcat resolve lendo **direto do layout físico**: um parser DODA **nativo, em Python puro**, extrai do próprio `.dtc` os offsets, tipos e tamanhos dos campos e parseia os registros fixed-length, decodificando cp1252. **Não precisa do FairCom, do servidor SQL nem do índice** — basta `dtcat info` / `export`. (Se o parser nativo não se aplicar e o FairCom estiver instalado, o dtcat ainda pode extrair o layout via `ctinfo` como apoio.)
 
 ### Fallback — c-tree via ctsqlimp (quando o índice existe)
 
@@ -139,9 +149,14 @@ Datasets c-tree ISAM costumam usar **cp1252** em campos de texto. O dtcat decodi
 - Versões muito antigas do c-tree (V8 / V9) podem não ser legíveis pelas versões atuais do FairCom DB (V13+). O `dtcat doctor` reporta a versão de runtime detectada.
 - macOS Apple Silicon: sem driver FairCom nativo — rode via Rosetta 2 ou uma VM Linux.
 
-## Por que não um parser em Python puro?
+## E o parser em Python puro?
 
-O formato c-tree ISAM é proprietário e fechado. Fazer engenharia reversa do zero é um projeto de vários meses, com alto risco entre as variações de formato. O dtcat segue o caminho pragmático: Python puro por cima, driver nativo da FairCom por baixo.
+Para os `.dtc` do Protheus, **ele existe** (desde a v0.4.0): o dtcat reverte o
+bloco DODA direto do binário e lê os registros fixed-length sem o FairCom. O
+formato c-tree ISAM completo é proprietário e fechado — revertê-lo inteiro
+(todos os modos, índices e variações) seria um projeto de vários meses e alto
+risco. Por isso o dtcat reverte só o que cobre o caso real (DODA + registros
+fixed-length) e mantém o driver nativo da FairCom como fallback para o resto.
 
 ## Licença
 

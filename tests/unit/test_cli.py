@@ -50,10 +50,10 @@ class TestHelp:
 class TestDoctor:
     def test_doctor_runs_and_returns_exit_code(self, runner: CliRunner, no_faircom: None) -> None:
         result = runner.invoke(app, ["doctor"])
-        # sem FairCom: deve falhar
-        assert result.exit_code == 1
+        # v0.4.0: sem FairCom o doctor passa (leitura via parser nativo) → exit 0.
+        assert result.exit_code == 0
         assert "Check" in result.stdout
-        assert "FAIL" in result.stdout
+        assert "opcional" in result.stdout  # FairCom listado como opcional
 
     def test_doctor_passes_when_env_complete(
         self, runner: CliRunner, fake_faircom_home: Path

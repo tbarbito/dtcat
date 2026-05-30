@@ -147,11 +147,22 @@ class TestCheckCtinfo:
         assert ok is False
 
 
+class TestCheckNativeParser:
+    def test_always_ok(self) -> None:
+        ok, detail = doctor._check_native_parser()
+        assert ok is True
+        assert "FairCom" in detail
+
+
 class TestRunDoctor:
-    def test_returns_false_with_no_faircom(self, no_faircom: None) -> None:
+    def test_returns_true_without_faircom(self, no_faircom: None) -> None:
+        # v0.4.0: o parser nativo lê .dtc Protheus sem FairCom → essenciais OK.
         console = Console(record=True)
         ok = doctor.run_doctor(console)
-        assert ok is False
+        assert ok is True
+        out = console.export_text()
+        assert "zero-FairCom" in out  # check do parser nativo presente
+        assert "opcional" in out  # FairCom listado como opcional, não como falha
 
     def test_returns_true_when_full_env(self, fake_faircom_home: Path) -> None:
         console = Console(record=True)
