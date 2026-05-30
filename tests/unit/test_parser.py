@@ -8,6 +8,56 @@ from dtcat import parser
 from dtcat.faircom import FieldDef, Layout
 
 
+def _frame_layout() -> Layout:
+    # soma do DODA = 18 (delete@0, recno@4, nome@8 len10)
+    return Layout(
+        record_length=18,
+        is_fixed=True,
+        fields=[
+            FieldDef("D_E_L_E_T_E_D", 0, 1, "FSTRING"),
+            FieldDef("R_E_C_N_O", 4, 4, "INT4U"),
+            FieldDef("NOME", 8, 10, "FSTRING"),
+        ],
+    )
+
+
+class TestRecordFrame:
+    """Enquadramento físico via R_E_C_N_O — reclen pode ser > soma do DODA e o
+    início dos dados pode não ser múltiplo do reclen (caso SQL Server)."""
+
+    def _rec(self, reclen: int, recno: int, nome: bytes) -> bytes:
+        b = bytearray(reclen)  # reclen FÍSICO (com padding além dos campos)
+        b[0:1] = b" "
+        b[4:8] = struct.pack("<I", recno)
+        b[8:18] = nome.ljust(10)[:10]
+        return bytes(b)
+
+    def test_detects_padded_reclen_and_unaligned_start(self) -> None:
+        layout = _frame_layout()
+        phys = 24  # 18 de campos + 6 de padding por registro
+        prefix = b"\xff" * 10  # data_start = 10 (não múltiplo de 24)
+        data = prefix + b"".join(
+            self._rec(phys, i, n) for i, n in [(1, b"A"), (2, b"B"), (3, b"C")]
+        )
+
+        data_start, reclen = parser.record_frame(data, layout)
+        assert (data_start, reclen) == (10, 24)
+
+        _cols, rows = parser.read_fixed(data, layout)
+        assert [r[1] for r in rows] == [1, 2, 3]
+        assert [r[2] for r in rows] == ["A", "B", "C"]
+
+    def test_falls_back_to_doda_sum_without_recno(self) -> None:
+        layout = Layout(
+            record_length=8,
+            is_fixed=True,
+            fields=[FieldDef("D_E_L_E_T_E_D", 0, 1, "FSTRING"), FieldDef("X", 1, 4, "INT4U")],
+        )
+        # sem R_E_C_N_O → enquadra do offset 0 com a soma do DODA
+        data_start, reclen = parser.record_frame(b"\x00" * 32, layout)
+        assert (data_start, reclen) == (0, 8)
+
+
 class TestDecodeValue:
     def test_fstring_decodes_cp1252_and_rstrips(self) -> None:
         assert parser.decode_value(b"Regi\xe3o   ", "FSTRING") == "Região"
