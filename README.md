@@ -99,7 +99,7 @@ Para arquivos `.dtc` do Protheus, o dtcat lê **direto do layout físico**: um p
 
 Isso cobre o caso real dos exports do Protheus (rotinas tipo APSDU), que vêm como **dados puros, fixed-length, sem o índice** — o índice referenciado internamente (IFIL) aponta para um caminho do servidor de origem, que não existe na sua máquina. O dtcat dispensa o servidor e o índice; os dados originais nunca são modificados.
 
-Para arquivos `.dtc` que **não** são fixed-length do Protheus (variáveis, indexados, layouts incomuns), há um fallback opcional via c-tree — veja [Avançado](#avançado-fallback-c-tree-opcional).
+Para o caso **raro** de arquivos `.dtc` que **não** são fixed-length do Protheus (variáveis, indexados, layouts incomuns), existe um fallback **opcional** via c-tree — veja [Avançado](#avançado-fallback-c-tree-opcional). Para o dia a dia com Protheus, você nunca precisa dele.
 
 ## Encoding
 
@@ -112,11 +112,14 @@ Datasets c-tree ISAM / Protheus costumam usar **cp1252** em campos de texto. O d
 
 ## Avançado: fallback c-tree (opcional)
 
-> **Você não precisa disto para ler `.dtc` do Protheus.** Esta seção só interessa
-> para arquivos `.dtc` que **não** são fixed-length do Protheus (variáveis,
-> indexados, ou que dependam do índice c-tree).
+> **Você não precisa disto para ler `.dtc` do Protheus.** O caminho principal do
+> dtcat é 100% Python puro, sem servidor, driver ou dependência externa. Esta
+> seção é um **recurso opcional e raramente necessário** — só interessa para
+> arquivos `.dtc` que **não** são fixed-length do Protheus (variáveis, indexados,
+> ou que dependam do índice c-tree). Se você só trabalha com exports do Protheus
+> (APSDU), pode ignorar esta seção por completo.
 
-Para esses casos, o dtcat usa o **FairCom DB Developer Edition** (gratuito, instalado por você uma vez por máquina): sobe um servidor c-tree local, **registra** o arquivo no dicionário SQL com `ctsqlimp` (linka **sem alterar os dados**), consulta via driver Python nativo (`pyctree`, DB-API 2.0) e depois **desvincula**. O `dtcat doctor` mostra se o FairCom está disponível.
+Para esses casos de borda, o dtcat usa, **opcionalmente**, o **FairCom DB Developer Edition** (gratuito, instalado por você uma vez por máquina): sobe um servidor c-tree local, **registra** o arquivo no dicionário SQL com `ctsqlimp` (linka **sem alterar os dados**), consulta via driver Python nativo (`pyctree`, DB-API 2.0) e depois **desvincula**. O `dtcat doctor` mostra se o FairCom está disponível.
 
 Obter e configurar o FairCom DB:
 
