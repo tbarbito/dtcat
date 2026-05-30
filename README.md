@@ -21,12 +21,29 @@ Requer **Python 3.11+**. O pacote ainda não está no PyPI; instale direto do Gi
 py -m pip install git+https://github.com/tbarbito/dtcat.git
 ```
 
-Depois é só usar o comando `dtcat`. Se o `dtcat` não for reconhecido (a pasta
-`Scripts` do Python pode não estar no `PATH`), use a forma equivalente:
+Depois, use o comando `dtcat`. **Se o `dtcat` não for reconhecido**, a pasta
+`Scripts` do Python não está no `PATH` (comum no Python da Microsoft Store).
+Duas saídas:
+
+**Opção A — usar o módulo diretamente (sempre funciona):**
 
 ```cmd
 py -m dtcat.cli --version
+py -m dtcat.cli export C:\caminho\arquivo.dtc -f csv
 ```
+
+**Opção B — adicionar a pasta `Scripts` ao PATH (uma vez), para usar só `dtcat`.**
+No PowerShell:
+
+```powershell
+$scripts = (py -c "import sysconfig; print(sysconfig.get_path('scripts'))")
+$user = [Environment]::GetEnvironmentVariable('Path','User')
+if (($user -split ';') -notcontains $scripts) {
+  [Environment]::SetEnvironmentVariable('Path', $user.TrimEnd(';') + ';' + $scripts, 'User')
+}
+```
+
+Feche e **reabra o terminal**; depois `dtcat --version` deve funcionar.
 
 ### Linux / macOS
 
