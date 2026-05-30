@@ -17,6 +17,11 @@ def _check_python() -> tuple[bool, str]:
     return ok, f"Python {ver.major}.{ver.minor}.{ver.micro}"
 
 
+def _check_native_parser() -> tuple[bool, str]:
+    """O parser DODA nativo é embutido no dtcat — lê .dtc Protheus sem FairCom."""
+    return True, "embutido (lê .dtc Protheus fixed-length sem FairCom)"
+
+
 def _check_faircom(home: Path | None) -> tuple[bool, str]:
     if home is None:
         return (
@@ -62,13 +67,29 @@ def _check_ctsqlimp(home: Path | None) -> tuple[bool, str]:
     return True, str(tool)
 
 
+def _check_ctinfo(home: Path | None) -> tuple[bool, str]:
+    if home is None:
+        return False, "skipped (FairCom não encontrado)"
+    tool = faircom.ctinfo_path(home)
+    if tool is None:
+        return False, "utilidade ctinfo não localizada em tools/ (usada pelo parser DODA)"
+    return True, str(tool)
+
+
 def run_doctor(console: Console) -> bool:
     home = faircom.find_faircom_home()
-    checks = [
+    # Essenciais: bastam para ler/exportar .dtc Protheus (caminho zero-FairCom).
+    essential = [
         ("Python ≥ 3.11", _check_python()),
+        ("Parser DODA nativo (zero-FairCom)", _check_native_parser()),
+    ]
+    # Opcionais: só necessários para o fallback c-tree (arquivos sem assinatura
+    # Protheus, variáveis, ou que dependam do índice). Ausência não é erro.
+    optional = [
         ("FairCom DB instalado", _check_faircom(home)),
         ("Lib nativa do client SQL", _check_native_lib(home)),
         ("Driver Python nativo (pyctree)", _check_native_driver(home)),
+        ("Utilidade ctinfo", _check_ctinfo(home)),
         ("Binário do servidor", _check_server_binary(home)),
         ("Utilidade ctsqlimp", _check_ctsqlimp(home)),
     ]
@@ -76,15 +97,29 @@ def run_doctor(console: Console) -> bool:
     table.add_column("Check", style="bold")
     table.add_column("Status", justify="center")
     table.add_column("Detalhe", overflow="fold")
+
     all_ok = True
-    for name, (ok, detail) in checks:
+    for name, (ok, detail) in essential:
         status = "[green]OK[/]" if ok else "[red]FAIL[/]"
         table.add_row(name, status, detail)
         all_ok = all_ok and ok
+
+    table.add_row("", "", "")
+    table.add_row("[dim]— fallback c-tree (opcional) —[/]", "", "")
+    for name, (ok, detail) in optional:
+        status = "[green]OK[/]" if ok else "[yellow]opcional[/]"
+        table.add_row(name, status, detail)
+
     console.print(table)
-    if not all_ok:
+    if all_ok and not optional[0][1][0]:
         console.print(
-            "\n[yellow]Para configurar o ambiente, veja:[/]\n"
+            "\n[green]Pronto para ler/exportar .dtc Protheus sem o FairCom.[/]\n"
+            "[dim]O FairCom só é necessário para o fallback c-tree (arquivos "
+            "não-Protheus). Para instalá-lo, veja docs/setup-linux.md.[/]"
+        )
+    elif not all_ok:
+        console.print(
+            "\n[yellow]Ambiente incompleto. Para configurar, veja:[/]\n"
             "  Linux:   docs/setup-linux.md\n"
             "  Windows: docs/setup-windows.md\n"
             "  macOS:   docs/setup-macos.md"

@@ -5,6 +5,53 @@ Todas as mudanças relevantes deste projeto são documentadas aqui.
 O formato segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/)
 e o projeto adota [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
+## [0.4.0] - 2026-05-30
+
+Leitura **zero-FairCom**: o dtcat agora lê arquivos `.dtc` do Protheus sem
+nenhuma dependência do FairCom DB instalado. Validado contra um arquivo real
+(SX3 da SA1, 363 campos, reclen 2032) com o FairCom DB **fisicamente removido**
+da máquina — exports CSV/JSON/XLSX byte-idênticos aos gerados com o FairCom
+presente.
+
+### Added
+- **Parser DODA nativo em Python puro** (`faircom.parse_doda_native`): lê o
+  bloco DODA direto do binário do `.dtc`, dispensando o utilitário `ctinfo` (e,
+  portanto, o FairCom) no caminho principal. Reverte o layout do recurso DODA:
+  cabeçalho com a contagem de campos duplicada, array de `(tamanho, tipo)` e
+  pool de nomes (cp1252, prefixados e null-terminated). Os offsets dos campos
+  são reconstruídos pela regra de alinhamento do c-tree — `align = (code & 7) + 1`
+  para tipos escalares, `1` para texto/array (tabela de tipos derivada de
+  `ctport.h`).
+- Testes do parser nativo com blocos DODA sintéticos (não exigem FairCom).
+
+### Changed
+- `faircom.extract_layout` tenta o parser nativo primeiro e só recorre ao
+  `ctinfo` (que exige FairCom) quando o nativo não se aplica.
+- `dtcat doctor` reescrito: Python e o parser DODA nativo são os checks
+  **essenciais**; FairCom DB, `ctinfo`, `ctsqlimp` e servidor passam a ser
+  **opcionais** (necessários apenas para o fallback c-tree). Sem FairCom, o
+  doctor agora retorna sucesso.
+
+## [0.3.0] - 2026-05-29
+
+Leitura direta guiada pelo DODA — validada contra um arquivo `.dtc` real
+exportado de Protheus (SX3 da SA1, 363 campos).
+
+### Added
+- **Parser DODA direto como caminho PRINCIPAL de leitura** (`dtcat.parser`):
+  lê os registros fixed-length diretamente do layout físico, **sem precisar do
+  servidor SQL nem do índice c-tree**. Resolve o caso real: exports tipo APSDU
+  vêm como dados puros, e o índice referenciado no IFIL aponta para um caminho
+  do servidor de origem (inexistente no destino) — o que fazia o `ctsqlimp`
+  falhar com `FOPN_ERR [12]`.
+- `faircom.extract_layout` extrai record length + DODA via `ctinfo.standalone`.
+- `doctor` agora também valida a utilidade `ctinfo`.
+
+### Changed
+- `read_info` / `read_all` usam o parser quando o arquivo tem assinatura
+  Protheus (fixed-length + flag de soft-delete no offset 0); caem para o
+  caminho c-tree (`ctsqlimp` + driver nativo) nos demais casos.
+
 ## [0.2.0] - 2026-05-29
 
 Realinhamento da arquitetura após validação contra o FairCom DB v13 real.
