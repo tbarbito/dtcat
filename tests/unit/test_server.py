@@ -2,26 +2,39 @@
 
 from __future__ import annotations
 
+import platform
 from pathlib import Path
 
 import pytest
 from rich.console import Console
 
-from dtcat import server
+from dtcat import faircom, server
+
+
+def _server_bin_name() -> str:
+    """Nome do binário do servidor que a descoberta procura no SO atual."""
+    table = faircom._SERVER_BINARIES
+    return table.get(platform.system(), table["_default"])[0]
+
+
+def _ctstop_name() -> str:
+    """Nome do ctstop que a descoberta procura no SO atual (.exe no Windows)."""
+    return "ctstop.exe" if platform.system() == "Windows" else "ctstop"
 
 
 def _mk_home(tmp_path: Path, *, with_ctstop: bool = True) -> Path:
     """Cria um FAIRCOM_HOME mínimo com binário do servidor (+ctstop opcional)."""
     srv = tmp_path / "server"
     srv.mkdir(parents=True, exist_ok=True)
-    binary = srv / "faircom"
+    binary = srv / _server_bin_name()
     binary.write_text("#!/bin/sh\n")
     binary.chmod(0o755)
     if with_ctstop:
         tools = tmp_path / "tools"
         tools.mkdir(parents=True, exist_ok=True)
-        (tools / "ctstop").write_text("#!/bin/sh\n")
-        (tools / "ctstop").chmod(0o755)
+        ctstop = tools / _ctstop_name()
+        ctstop.write_text("#!/bin/sh\n")
+        ctstop.chmod(0o755)
     return tmp_path
 
 
@@ -69,7 +82,7 @@ class TestServerStop:
 
         run.assert_called_once()
         args = run.call_args[0][0]
-        assert str(home / "tools" / "ctstop") == args[0]
+        assert str(home / "tools" / _ctstop_name()) == args[0]
         assert "-AUTO" in args
         assert not isolated_pid_file.exists()
 
